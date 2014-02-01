@@ -23,4 +23,5 @@ function hidePages() {
     $('#simulation').hide();
     $('#reports').hide();
     $('#database').hide();
+    $('#botsim').hide();
 }
