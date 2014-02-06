@@ -213,34 +213,6 @@ BOTSIM.initViewport = function () {
     this.container.appendChild(this.renderer.domElement);
 };
 
-BOTSIM.initScene = function () {
-    var that = this;
-
-    this.scene = new THREE.Scene();
-
-    this.camera = new THREE.PerspectiveCamera(45,
-            this.ASPECT, 1, 1000);
-    this.camera.position.set(0, 0, 3);
-    this.scene.add(this.camera);
-
-    this.lights = {};
-    this.lights.directed = new THREE.DirectionalLight(0xffffff, 1.0);
-    this.lights.directed.position.set(0, 1, 1);
-    this.scene.add(this.lights.directed);
-
-    this.lights.ambient = new THREE.AmbientLight(0x202020);
-    this.scene.add(this.lights.ambient);
-
-    this.loader = new THREE.ObjectLoader();
-
-    this.loader.load('/assets/json/mouse.js', function (obj) {
-        that.robot = obj;
-        that.robot.scale.set(0.2, 0.2, 0.2);
-        that.scene.add(that.robot);
-        that.fire('scene-loaded');
-    });
-};
-
 BOTSIM.loadScene = function (files) {
     var tasksLeft = 0,
         i,
