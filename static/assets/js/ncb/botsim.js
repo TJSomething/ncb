@@ -85,9 +85,24 @@ function Robot(obj) {
 
     // Make the robot model a child of the dummy object
     loader.load('/assets/json/mouse.js', function (robotObj) {
+        var bounds, camHeight, near;
 
         robotObj.scale.set(0.2, 0.2, 0.2);
         obj.add(robotObj);
+
+        // Place a camera in the robot
+        // Find the bounding box
+        bounds = (new THREE.Box3()).setFromObject(robotObj);
+        // The camera should be 3/4 up the robot
+        camHeight = 0.75 * bounds.max.y;
+        // The near clipping plane should be a little further out
+        //  than the front
+        near = 1.05 * bounds.max.z;
+        // Make our camera
+        obj.camera = new THREE.PerspectiveCamera(45, 4 / 3, near, 1000);
+        obj.camera.position.set(0, camHeight, 0);
+        obj.camera.rotateY(Math.PI); // Otherwise, it'll point backward
+        obj.add(obj.camera);
 
         BOTSIM.fire('robot-ready');
     });
@@ -152,9 +167,12 @@ BOTSIM.initViewport = function () {
     width = this.container.offsetWidth;
     height = width / this.ASPECT;
 
-    this.renderer = new THREE.WebGLRenderer();
+    this.renderer = new THREE.WebGLRenderer({
+        antialias: true
+    });
 
     this.renderer.setSize(width, height);
+
     this.container.appendChild(this.renderer.domElement);
 };
 
@@ -332,11 +350,45 @@ BOTSIM.readyScene = function () {
 };
 
 BOTSIM.run = function () {
-    var that = this;
+    var that = this,
+        width = this.container.offsetWidth,
+        height = this.container.offsetHeight,
+        dpr = window.devicePixelRatio || 1,
+        views = [
+            {
+                left: 0,
+                bottom: 0,
+                width: width * dpr,
+                height: height * dpr,
+                camera: this.camera
+            },
+            {
+                left: 0,
+                bottom: 0,
+                width: Math.floor(width / 4) * dpr,
+                height: Math.floor(height / 4) * dpr,
+                camera: this.robot.camera
+            }
+        ],
+        renderer = this.renderer;
+
 
     // Animate
     function run() {
-        that.renderer.render(that.scene, that.camera);
+        var i, left, bottom, width, height;
+
+        for (i = 0; i < views.length; i += 1) {
+            left = views[i].left;
+            bottom = views[i].bottom;
+            width = views[i].width;
+            height = views[i].height;
+
+            renderer.setViewport(left, bottom, width, height);
+            renderer.setScissor(left, bottom, width, height);
+            renderer.enableScissorTest(true);
+
+            renderer.render(that.scene, views[i].camera);
+        }
 
         window.requestAnimationFrame(run);
         that.fire('render');
@@ -362,4 +414,3 @@ BOTSIM.initViewport();
 // Initialize the scene
 //app.initScene();
 
-/////////////////////// Page Logic ///////////////////////////
