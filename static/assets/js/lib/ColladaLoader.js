@@ -127,6 +127,8 @@ THREE.ColladaLoader = function () {
 			parts.pop();
 			baseUrl = ( parts.length < 1 ? '.' : parts.join( '/' ) ) + '/';
 
+		} else {
+			baseUrl = '';
 		}
 
 		parseAsset();

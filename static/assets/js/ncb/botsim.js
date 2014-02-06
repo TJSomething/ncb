@@ -3,14 +3,15 @@
 
 'use strict';
 
+/////////////////////////////// Constants ////////////////////////////
 var BOTSIM = BOTSIM || {
-    // Constants:
+    
     ASPECT: 16 / 9,
     FPS: 60
 };
 
 
-// Convienience functions and classes
+//////////////// Convenience functions and objects ////////////////////
 // Yay, incompatibility! Probably should put this in its own file
 window.requestAnimationFrame = window.requestAnimationFrame ||
                                window.mozRequestAnimationFrame ||
@@ -69,7 +70,81 @@ function makePublisher(o) {
 
 makePublisher(BOTSIM);
 
-// The actual game logic
+/////////////////////////// Game Logic ///////////////////////////
+// Methods that the robot needs
+function Robot(obj) {
+    var loader = new THREE.ObjectLoader();
+
+    // Allow usage of new
+    if (!(this instanceof Robot)) {
+        return new Robot(obj);
+    }
+    // Clear the dummy geometry used to stand in for
+    //  the robot
+    obj.geometry = new THREE.Geometry();
+
+    // Make the robot model a child of the dummy object
+    loader.load('/assets/json/mouse.js', function (robotObj) {
+
+        robotObj.scale.set(0.2, 0.2, 0.2);
+        obj.add(robotObj);
+
+        BOTSIM.fire('robot-ready');
+    });
+
+    // Methods for robots
+    obj.instantForward = function (displacement) {
+        var model = new THREE.Vector3(0, 0, displacement),
+            world = model.applyQuaternion(this.quaternion);
+
+        this.position.add(world);
+    };
+
+    obj.instantBackward = function(displacement) {
+        this.instantForward(-displacement);
+    };
+
+    obj.instantRight = function (displacement) {
+        this.rotateY(-displacement);
+    };
+
+    obj.instantLeft = obj.rotateY;
+
+    // This finds exactly how the robot would move if
+    //  it were going forward and turning at the same
+    //  time.
+    obj.simultaneousTurnMove = function (ds, dtheta) {
+        var phi, turningRadius, dist;
+
+        if (Math.abs(dtheta) > 1e-6) {
+            phi = (Math.PI - dtheta) / 2;
+            turningRadius = ds / dtheta;
+            dist = turningRadius * Math.sin(dtheta) / Math.sin(phi);
+
+            this.rotateY(Math.PI/2 - phi);
+            this.instantForward(dist);
+            this.rotateY(dtheta - Math.PI/2 + phi);
+        } else {
+            // We need to handle the case where there is no turning
+            this.instantForward(ds);
+        }
+    };
+
+    obj.move = function (dt) {
+        var ds = this.speed * dt,
+            dtheta = this.angularVelocity * dt;
+
+        this.simultaneousTurnMove(ds, dtheta);
+    };
+    BOTSIM.on('tick', obj.move, obj);
+
+    // Properties
+    obj.speed = 0;
+    obj.angularVelocity = 0;
+
+    return obj;
+}
+
 BOTSIM.initViewport = function () {
     var width, height;
 
@@ -104,11 +179,156 @@ BOTSIM.initScene = function () {
     this.loader = new THREE.ObjectLoader();
 
     this.loader.load('/assets/json/mouse.js', function (obj) {
-        that.mouse = obj;
-        that.mouse.scale.set(0.2, 0.2, 0.2);
-        that.scene.add(that.mouse);
+        that.robot = obj;
+        that.robot.scale.set(0.2, 0.2, 0.2);
+        that.scene.add(that.robot);
         that.fire('scene-loaded');
     });
+};
+
+BOTSIM.loadScene = function (files) {
+    var tasksLeft = 0,
+        i,
+        imageLibrary = {},
+        sceneSource,
+        app = this;
+
+    // Loads each file
+    function loadFile(file) {
+        var name = file.name,
+            type = file.type,
+            reader = new FileReader();
+
+        // Everytime we start a task that blocks loading,
+        //  we add a task left
+        tasksLeft += 1;
+
+        if (type.slice(0, 5) === 'image') {
+            tasksLeft += 1;
+
+            reader.onload = function () {
+                imageLibrary[name] = reader.result;
+
+                taskDone();
+            };
+
+            reader.readAsDataURL(file);
+        } else if (type === 'model/vnd.collada+xml') {
+            tasksLeft += 1;
+
+            reader.onload = function () {
+                sceneSource = reader.result;
+                taskDone();
+            };
+
+            reader.readAsText(file);
+        }
+
+        taskDone();
+    }
+
+    // Assembles and shows the scene, if it's ready
+    function taskDone() {
+        var imageName,
+            loader = new THREE.ColladaLoader(),
+            xmlParser = new DOMParser(),
+            xml;
+
+        // If we don't do this, the axes will be wrong
+        loader.options.convertUpAxis = true;
+
+        tasksLeft -= 1;
+
+        // Make sure it's ready
+        if (tasksLeft <= 0) {
+            // Place the image data into the scene source
+            for (imageName in imageLibrary) {
+                if (imageLibrary.hasOwnProperty(imageName)) {
+                    sceneSource =
+                        sceneSource.replace(imageName,
+                            imageLibrary[imageName]);
+                }
+            }
+
+            // Now that the textures have been inlined with
+            //  the scene, we can load it.
+            xml = xmlParser.parseFromString(sceneSource,
+                'application/xml');
+            
+            loader.parse(xml, function (obj) {
+                app.scene = new THREE.Scene();
+                app.scene.add(obj.scene);
+
+                app.fire('scene-loaded');
+            });
+        }
+    }
+
+    // Load all the files
+    for (i = 0; i < files.length; i += 1) {
+        loadFile(files[i]);
+    }
+};
+
+// This grabs objects in the scene that are important so that
+//  the simulation can use them.
+BOTSIM.readyScene = function () {
+    var app = this,
+        // This is so we can do a few asynchronous tasks
+        tasksLeft = 0;
+
+    function taskDone() {
+        tasksLeft -= 1;
+
+        if (tasksLeft <= 0) {
+            app.fire('scene-ready');
+        }
+    }
+
+    function initCamera(obj) {
+        if (obj.hasOwnProperty('aspect')) {
+            // We don't care what you say your aspect ratio is,
+            //  we've already sized the viewport.
+            obj.aspect = app.ASPECT;
+            app.camera = obj;
+
+            // I have no idea why this has to be done, but
+            //  it has something to do with the Collada
+            //  axis fixing.
+            app.camera.rotateX(-Math.PI/2);
+
+            app.controls = new THREE.FlyControls(app.camera);
+            app.controls.dragToLook = true;
+        }
+    }
+
+    function initRobot(obj) {
+        if (obj.name === 'Robot') {
+            tasksLeft += 1;
+
+            BOTSIM.on('robot-ready', taskDone);
+
+            // Set up our robot
+            app.robot = new Robot(obj);
+        }
+    }
+
+    function traverse(obj) {
+        var i;
+
+        // Try to initialize the current object
+        initCamera(obj);
+        initRobot(obj);
+
+        for (i = 0; i < obj.children.length; i += 1) {
+            traverse(obj.children[i]);
+        }
+    }
+
+    tasksLeft += 1;
+    traverse(app.scene);
+
+    taskDone();
 };
 
 BOTSIM.run = function () {
@@ -124,20 +344,22 @@ BOTSIM.run = function () {
     run();
 
     // A physics and stuff loop
-    window.setInterval(this.fire.bind(this, 'tick'), 1000/this.FPS);
+    window.setInterval(this.fire.bind(this, 'tick', 1/this.FPS), 1000/this.FPS);
 };
 
-// When the scene's loaded, run the animation and the physics
-BOTSIM.on('scene-loaded', 'run', BOTSIM);
+BOTSIM.on('scene-loaded', 'readyScene', BOTSIM);
+
+BOTSIM.on('scene-ready', 'run', BOTSIM);
 
 BOTSIM.on('tick', function () {
-    this.mouse.rotation.y += 0.01;
+    this.controls.update(1);
 }, BOTSIM);
 
-(function (app) {
-    // Initialize the view
-    app.initViewport();
+////////////// Initializing the simulation ///////////////////
+// Initialize the view
+BOTSIM.initViewport();
 
-    // Initialize the scene
-    app.initScene();
-}(BOTSIM));
+// Initialize the scene
+//app.initScene();
+
+/////////////////////// Page Logic ///////////////////////////
