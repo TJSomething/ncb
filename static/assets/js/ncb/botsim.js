@@ -153,6 +153,43 @@ function Robot(obj) {
     };
     BOTSIM.on('tick', obj.move, obj);
 
+    document.addEventListener( 'keydown', function (event) {
+        if (event.altKey) {
+            return;
+        }
+
+        switch (event.keyCode) {
+            case 98: // NUM 2
+                obj.speed = -1;
+                break;
+            case 104: // NUM 8
+                obj.speed = 1;
+                break;
+            case 102: // NUM 6
+                obj.angularVelocity = -1;
+                break;
+            case 100: // NUM 4
+                obj.angularVelocity = 1;
+                break;
+        }
+    }, false );
+    document.addEventListener( 'keyup', function (event) {
+        switch (event.keyCode) {
+            case 98: // NUM 2
+                obj.speed = 0;
+                break;
+            case 104: // NUM 8
+                obj.speed = 0;
+                break;
+            case 102: // NUM 6
+                obj.angularVelocity = 0;
+                break;
+            case 100: // NUM 4
+                obj.angularVelocity = 0;
+                break;
+        }
+    }, false );
+
     // Properties
     obj.speed = 0;
     obj.angularVelocity = 0;
@@ -317,6 +354,7 @@ BOTSIM.readyScene = function () {
 
             app.controls = new THREE.FlyControls(app.camera);
             app.controls.dragToLook = true;
+            app.controls.movementSpeed *= 0.25;
         }
     }
 
