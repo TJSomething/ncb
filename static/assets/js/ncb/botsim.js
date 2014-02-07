@@ -174,15 +174,18 @@ function Robot(obj) {
 
         // Lazy initialization!
         obj.collisionVertices = obj.collisionVertices || (function () {
-            var b = obj.bounds;
-            return [new THREE.Vector3( b.min.x, b.min.y, b.min.z ),
-                    new THREE.Vector3( b.min.x, b.min.y, b.max.z ),
-                    new THREE.Vector3( b.min.x, b.max.y, b.min.z ),
-                    new THREE.Vector3( b.min.x, b.max.y, b.max.z ),
-                    new THREE.Vector3( b.max.x, b.min.y, b.min.z ),
-                    new THREE.Vector3( b.max.x, b.min.y, b.max.z ),
-                    new THREE.Vector3( b.max.x, b.max.y, b.min.z ),
-                    new THREE.Vector3( b.max.x, b.max.y, b.max.z )];
+            var b = obj.bounds,
+                Vec = THREE.Vector3;
+            // We're really going to be doing to do collisions with the
+            //  bounding box of the robot
+            return [new Vec( b.min.x, b.min.y, b.min.z ),
+                    new Vec( b.min.x, b.min.y, b.max.z ),
+                    new Vec( b.min.x, b.max.y, b.min.z ),
+                    new Vec( b.min.x, b.max.y, b.max.z ),
+                    new Vec( b.max.x, b.min.y, b.min.z ),
+                    new Vec( b.max.x, b.min.y, b.max.z ),
+                    new Vec( b.max.x, b.max.y, b.min.z ),
+                    new Vec( b.max.x, b.max.y, b.max.z )];
         }());
 
         for (idx = 0; idx < obj.collisionVertices.length; idx += 1) {
