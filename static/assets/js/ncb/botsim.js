@@ -1,5 +1,5 @@
 /* jslint browser: true */
-/* global THREE */
+/* global THREE, console */
 
 'use strict';
 
@@ -85,19 +85,19 @@ function Robot(obj) {
 
     // Make the robot model a child of the dummy object
     loader.load('/assets/json/mouse.js', function (robotObj) {
-        var bounds, camHeight, near;
+        var camHeight, near;
 
         robotObj.scale.set(0.2, 0.2, 0.2);
         obj.add(robotObj);
 
         // Place a camera in the robot
         // Find the bounding box
-        bounds = (new THREE.Box3()).setFromObject(robotObj);
+        obj.bounds = (new THREE.Box3()).setFromObject(robotObj);
         // The camera should be 3/4 up the robot
-        camHeight = 0.75 * bounds.max.y;
+        camHeight = 0.75 * obj.bounds.max.y;
         // The near clipping plane should be a little further out
         //  than the front
-        near = 1.05 * bounds.max.z;
+        near = 1.05 * obj.bounds.max.z;
         // Make our camera
         obj.camera = new THREE.PerspectiveCamera(45, 4 / 3, near, 1000);
         obj.camera.position.set(0, camHeight, 0);
@@ -143,15 +143,64 @@ function Robot(obj) {
             // We need to handle the case where there is no turning
             this.instantForward(ds);
         }
+        // Make sure everyone knows that we've moved
+        this.updateMatrix();
     };
 
     obj.move = function (dt) {
         var ds = this.speed * dt,
             dtheta = this.angularVelocity * dt;
 
+        // Move
         this.simultaneousTurnMove(ds, dtheta);
+
+        // Check for collisions
+        if (this.detectCollisions()) {
+            // Resolve the collision
+            this.simultaneousTurnMove(-ds, -dtheta);
+        }
     };
     BOTSIM.on('tick', obj.move, obj);
+
+
+    obj.detectCollisions = function () {
+        var idx,
+            originPoint = this.position.clone(),
+            localVertex,
+            globalVertex,
+            directionVector,
+            ray,
+            collisionResults;
+
+        // Lazy initialization!
+        obj.collisionVertices = obj.collisionVertices || (function () {
+            var b = obj.bounds;
+            return [new THREE.Vector3( b.min.x, b.min.y, b.min.z ),
+                    new THREE.Vector3( b.min.x, b.min.y, b.max.z ),
+                    new THREE.Vector3( b.min.x, b.max.y, b.min.z ),
+                    new THREE.Vector3( b.min.x, b.max.y, b.max.z ),
+                    new THREE.Vector3( b.max.x, b.min.y, b.min.z ),
+                    new THREE.Vector3( b.max.x, b.min.y, b.max.z ),
+                    new THREE.Vector3( b.max.x, b.max.y, b.min.z ),
+                    new THREE.Vector3( b.max.x, b.max.y, b.max.z )];
+        }());
+
+        for (idx = 0; idx < obj.collisionVertices.length; idx += 1) {
+            localVertex = obj.collisionVertices[idx].clone();
+            globalVertex = localVertex.applyMatrix4(this.matrix);
+            directionVector = globalVertex.sub(this.position);
+            ray = new THREE.Raycaster(originPoint, directionVector.clone().normalize());
+            collisionResults = ray.intersectObjects(BOTSIM.collidableMeshList);
+
+            if (collisionResults.length > 0 &&
+                collisionResults[0].distance < directionVector.length()) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+    BOTSIM.on('tick', obj.detectCollisions, obj);
 
     document.addEventListener( 'keydown', function (event) {
         if (event.altKey) {
@@ -341,12 +390,21 @@ BOTSIM.readyScene = function () {
         }
     }
 
+    app.collidableMeshList = [];
+    function addCollidable(obj) {
+        if (obj.hasOwnProperty('geometry') &&
+            obj.name !== 'Robot') {
+            app.collidableMeshList.push(obj);
+        }
+    }
+
     function traverse(obj) {
         var i;
 
         // Try to initialize the current object
         initCamera(obj);
         initRobot(obj);
+        addCollidable(obj);
 
         for (i = 0; i < obj.children.length; i += 1) {
             traverse(obj.children[i]);
