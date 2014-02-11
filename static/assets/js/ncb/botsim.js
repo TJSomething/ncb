@@ -395,30 +395,32 @@ BOTSIM.loadScene = function (files) {
 
         // Make sure it's ready
         if (tasksLeft <= 0) {
-            // Place the image data into the scene source
-            for (imageName in imageLibrary) {
-                if (imageLibrary.hasOwnProperty(imageName)) {
-                    sceneSource =
-                        sceneSource.replace(imageName,
-                            imageLibrary[imageName]);
+            if (sceneSource) {
+                // Place the image data into the scene source
+                for (imageName in imageLibrary) {
+                    if (imageLibrary.hasOwnProperty(imageName)) {
+                        sceneSource =
+                            sceneSource.replace(imageName,
+                                imageLibrary[imageName]);
+                    }
                 }
+
+                // Now that the textures have been inlined with
+                //  the scene, we can load it.
+                xml = xmlParser.parseFromString(sceneSource,
+                    'application/xml');
+                
+                loader.parse(xml, function (obj) {
+                    app.scene = new THREE.Scene();
+                    app.scene.add(obj.scene);
+
+                    app.fire('scene-loaded');
+                });
+            } else {
+                window.alert('No level found. Try loading again.');
             }
-
-            // Now that the textures have been inlined with
-            //  the scene, we can load it.
-            xml = xmlParser.parseFromString(sceneSource,
-                'application/xml');
-            
-            loader.parse(xml, function (obj) {
-                app.scene = new THREE.Scene();
-                app.scene.add(obj.scene);
-
-                app.fire('scene-loaded');
-            });
         }
     }
-
-    this.initViewport();
 
     tasksLeft += 1;
     // Load all the files
@@ -434,6 +436,8 @@ BOTSIM.readyScene = function () {
     var app = this,
         // This is so we can do a few asynchronous tasks
         tasksLeft = 0;
+
+    this.initViewport();
 
     function taskDone() {
         tasksLeft -= 1;
@@ -564,6 +568,9 @@ $('input[name=botsim-character]').on('change', function () {
 });
 
 $('#botsim-file').on('change', function () {
-    $('div #botsim-options').hide();
     BOTSIM.loadScene(this.files);
+});
+
+BOTSIM.on('scene-loaded', function () {
+    $('div #botsim-options').hide();
 });
