@@ -268,7 +268,6 @@ Robot.modelLoaders = {
     steve:
         function (obj) {
             var loader = new THREE.JSONLoader(true);
-            console.log('steve');
             loader.load('/assets/json/steve.js', function (geometry, materials) {
                 var i, camHeight, near,
                     steve = new THREE.SkinnedMesh(geometry,
@@ -286,7 +285,14 @@ Robot.modelLoaders = {
                 obj.add(steve);
 
                 for (i = 0; i < materials.length; i += 1) {
+                    // For bones
                     materials[i].skinning = true;
+                    // For that pixelated Minecraft effect
+                    materials[i].map.magFilter = THREE.NearestFilter;
+                    // Fix transparency rendering
+                    materials[i].alphaTest = 0.5;
+                    // Fixes fringes on hat texture, in theory
+                    materials[i].map.premultiplyAlpha = true;
                 }
 
                 // Place a camera in the robot
