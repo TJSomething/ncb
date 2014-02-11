@@ -359,10 +359,6 @@ BOTSIM.loadScene = function (files) {
             type = file.type,
             reader = new FileReader();
 
-        // Everytime we start a task that blocks loading,
-        //  we add a task left
-        tasksLeft += 1;
-
         if (type.slice(0, 5) === 'image') {
             tasksLeft += 1;
 
@@ -373,7 +369,7 @@ BOTSIM.loadScene = function (files) {
             };
 
             reader.readAsDataURL(file);
-        } else if (type === 'model/vnd.collada+xml') {
+        } else if (name.slice(-3).toLowerCase() === 'dae') {
             tasksLeft += 1;
 
             reader.onload = function () {
@@ -383,8 +379,6 @@ BOTSIM.loadScene = function (files) {
 
             reader.readAsText(file);
         }
-
-        taskDone();
     }
 
     // Assembles and shows the scene, if it's ready
@@ -426,10 +420,12 @@ BOTSIM.loadScene = function (files) {
 
     this.initViewport();
 
+    tasksLeft += 1;
     // Load all the files
     for (i = 0; i < files.length; i += 1) {
         loadFile(files[i]);
     }
+    taskDone();
 };
 
 // This grabs objects in the scene that are important so that
