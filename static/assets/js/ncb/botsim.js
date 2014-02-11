@@ -1,13 +1,13 @@
 /* jslint browser: true */
-/* global THREE, console */
+/* global THREE, $:false */
 
 'use strict';
 
 /////////////////////////////// Constants ////////////////////////////
 var BOTSIM = BOTSIM || {
-    
     ASPECT: 16 / 9,
-    FPS: 60
+    FPS: 60,
+    CHARACTER: 'mouse'
 };
 
 
@@ -72,46 +72,25 @@ makePublisher(BOTSIM);
 
 /////////////////////////// Game Logic ///////////////////////////
 // Methods that the robot needs
-function Robot(obj) {
-    var loader = new THREE.ObjectLoader();
-
+function Robot(obj, robotType) {
     // Allow usage of new
     if (!(this instanceof Robot)) {
-        return new Robot(obj);
+        return new Robot(obj, robotType);
     }
+
     // Clear the dummy geometry used to stand in for
     //  the robot
     obj.geometry = new THREE.Geometry();
 
-    // Make the robot model a child of the dummy object
-    loader.load('/assets/json/mouse.js', function (robotObj) {
-        var camHeight, near;
-
-        robotObj.scale.set(0.2, 0.2, 0.2);
-        obj.add(robotObj);
-
-        // Place a camera in the robot
-        // Find the bounding box
-        obj.bounds = (new THREE.Box3()).setFromObject(robotObj);
-        // The camera should be 3/4 up the robot
-        camHeight = 0.75 * obj.bounds.max.y;
-        // The near clipping plane should be a little further out
-        //  than the front
-        near = 1.05 * obj.bounds.max.z;
-        // Make our camera
-        obj.camera = new THREE.PerspectiveCamera(45, 4 / 3, near, 1000);
-        obj.camera.position.set(0, camHeight, 0);
-        obj.camera.rotateY(Math.PI); // Otherwise, it'll point backward
-        obj.add(obj.camera);
-
-        BOTSIM.fire('robot-ready');
-    });
+    // Load the robot model asynchronously
+    Robot.loadModel(obj, robotType);
 
     // Methods for robots
     obj.instantForward = function (displacement) {
         var model = new THREE.Vector3(0, 0, displacement),
             world = model.applyQuaternion(this.quaternion);
 
+        this.animateWalking(displacement);
         this.position.add(world);
     };
 
@@ -120,6 +99,7 @@ function Robot(obj) {
     };
 
     obj.instantRight = function (displacement) {
+        this.animateWalking(0, displacement);
         this.rotateY(-displacement);
     };
 
@@ -136,9 +116,9 @@ function Robot(obj) {
             turningRadius = ds / dtheta;
             dist = turningRadius * Math.sin(dtheta) / Math.sin(phi);
 
-            this.rotateY(Math.PI/2 - phi);
+            this.instantRight(Math.PI/2 - phi);
             this.instantForward(dist);
-            this.rotateY(dtheta - Math.PI/2 + phi);
+            this.instantRight(dtheta - Math.PI/2 + phi);
         } else {
             // We need to handle the case where there is no turning
             this.instantForward(ds);
@@ -249,6 +229,107 @@ function Robot(obj) {
     return obj;
 }
 
+// This loads the robot model asynchronously
+Robot.loadModel = function (obj, robotType) {
+    Robot.modelLoaders[robotType](obj);
+};
+
+Robot.modelLoaders = {
+    mouse:
+        function (obj) {
+            var loader = new THREE.ObjectLoader();
+
+            loader.load('/assets/json/mouse.js', function (robotObj) {
+                var camHeight, near;
+
+                robotObj.scale.set(0.2, 0.2, 0.2);
+                obj.add(robotObj);
+
+                // Place a camera in the robot
+                // Find the bounding box
+                obj.bounds = (new THREE.Box3()).setFromObject(robotObj);
+                // The camera should be 3/4 up the robot
+                camHeight = 0.75 * obj.bounds.max.y;
+                // The near clipping plane should be a little further out
+                //  than the front
+                near = 1.05 * obj.bounds.max.z;
+                // Make our camera
+                obj.camera = new THREE.PerspectiveCamera(45, 4 / 3, near, 1000);
+                obj.camera.position.set(0, camHeight, 0);
+                obj.camera.rotateY(Math.PI); // Otherwise, it'll point backward
+                obj.add(obj.camera);
+
+                // Animated walking is a no-op
+                obj.animateWalking = function () {};
+
+                BOTSIM.fire('robot-ready');
+            });
+        },
+    steve:
+        function (obj) {
+            var loader = new THREE.JSONLoader(true);
+            console.log('steve');
+            loader.load('/assets/json/steve.js', function (geometry, materials) {
+                var i, camHeight, near,
+                    steve = new THREE.SkinnedMesh(geometry,
+                        new THREE.MeshFaceMaterial(materials)),
+                    findBoneIndex = (function () {
+                        var boneNames = steve.
+                                bones.
+                                map(function (bone) { return bone.name; });
+                        return Array.prototype.indexOf.bind(boneNames);
+                    }()),
+                    rleg = steve.bones[findBoneIndex('uleg.R')],
+                    lleg = steve.bones[findBoneIndex('uleg.L')];
+
+
+                obj.add(steve);
+
+                for (i = 0; i < materials.length; i += 1) {
+                    materials[i].skinning = true;
+                }
+
+                // Place a camera in the robot
+                // Find the bounding box
+                obj.bounds = (new THREE.Box3()).setFromObject(steve);
+                // The camera should be 3/4 up the robot
+                camHeight = 0.75 * obj.bounds.max.y;
+                // The near clipping plane should be a little further out
+                //  than the front
+                near = 1.05 * obj.bounds.max.z;
+                // Make our camera
+                obj.camera = new THREE.PerspectiveCamera(45, 4 / 3, near, 1000);
+                obj.camera.position.set(0, camHeight, 0);
+                obj.camera.rotateY(Math.PI); // Otherwise, it'll point backward
+                obj.add(obj.camera);
+
+                // Add walking
+
+                obj.animateWalking = (function() {
+                    var walkState = 0,
+                        maxLegAngle = Math.PI/9;
+
+                    return function (ds, dtheta) {
+                        // Don't let undefined through
+                        ds = ds || 0;
+                        dtheta = dtheta || 0;
+
+                        // Change our walk state
+                        walkState += ds;
+
+                        rleg.rotation.x =
+                            maxLegAngle * Math.sin(walkState / maxLegAngle);
+                        lleg.rotation.x =
+                            -maxLegAngle * Math.sin(walkState / maxLegAngle);
+                    };
+                }());
+
+                BOTSIM.fire('robot-ready');
+            });
+        }
+};
+
+
 BOTSIM.initViewport = function () {
     var width, height;
 
@@ -343,6 +424,8 @@ BOTSIM.loadScene = function (files) {
         }
     }
 
+    this.initViewport();
+
     // Load all the files
     for (i = 0; i < files.length; i += 1) {
         loadFile(files[i]);
@@ -389,7 +472,7 @@ BOTSIM.readyScene = function () {
             BOTSIM.on('robot-ready', taskDone);
 
             // Set up our robot
-            app.robot = new Robot(obj);
+            app.robot = new Robot(obj, BOTSIM.CHARACTER);
         }
     }
 
@@ -478,10 +561,13 @@ BOTSIM.on('tick', function () {
     this.controls.update(1);
 }, BOTSIM);
 
-////////////// Initializing the simulation ///////////////////
-// Initialize the view
-BOTSIM.initViewport();
+///////////////////// GUI callbacks //////////////////////////
 
-// Initialize the scene
-//app.initScene();
+$('input[name=botsim-character]').on('change', function () {
+    BOTSIM.CHARACTER = $(this).val();
+});
 
+$('#botsim-file').on('change', function () {
+    $('div #botsim-options').hide();
+    BOTSIM.loadScene(this.files);
+});

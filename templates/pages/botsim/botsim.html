@@ -7,6 +7,15 @@
     <!-- End Title of Tab -->
     <div id="botsim-body" />
 
-    <input type="file" id="botsim-file" onchange="BOTSIM.loadScene(this.files)" multiple />
+    <div id="botsim-options">
+        <div><strong>Choose your character: </strong>
+        <input name="botsim-character" value="mouse" checked id="botsim-mouse-option" type="radio" />
+             <label for="botsim-mouse-option"> Mouse </label>
+        <input name="botsim-character" value="steve" id="botsim-steve-option" type="radio" />
+            <label for="botsim-steve-option"> Steve </label></div>
+
+        <div><strong>Load Level and Textures: </strong>
+        <input type="file" id="botsim-file" multiple /></div>
+    </div>
 </div>
 <!-- End Main Div For Database Tab -->
