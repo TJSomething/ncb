@@ -100,10 +100,12 @@ function Robot(obj, robotType) {
 
     obj.instantRight = function (displacement) {
         this.animateWalking(0, displacement);
-        this.rotateY(-displacement);
+        this.rotateY(displacement);
     };
 
-    obj.instantLeft = obj.rotateY;
+    obj.instantLeft = function (displacement) {
+        obj.instantRight(-displacement);
+    };
 
     // This finds exactly how the robot would move if
     //  it were going forward and turning at the same
@@ -298,11 +300,11 @@ Robot.modelLoaders = {
                 // Place a camera in the robot
                 // Find the bounding box
                 obj.bounds = (new THREE.Box3()).setFromObject(steve);
-                // The camera should be 3/4 up the robot
+                // The camera should be at eye level
                 camHeight = 0.75 * obj.bounds.max.y;
                 // The near clipping plane should be a little further out
                 //  than the front
-                near = 1.05 * obj.bounds.max.z;
+                near = 1.01 * obj.bounds.max.z;
                 // Make our camera
                 obj.camera = new THREE.PerspectiveCamera(45, 4 / 3, near, 1000);
                 obj.camera.position.set(0, camHeight, 0);
@@ -344,7 +346,8 @@ BOTSIM.initViewport = function () {
     height = width / this.ASPECT;
 
     this.renderer = new THREE.WebGLRenderer({
-        antialias: true
+        antialias: true,
+        preserveDrawingBuffer: true
     });
 
     this.renderer.setSize(width, height);
@@ -514,6 +517,8 @@ BOTSIM.run = function () {
         width = this.container.offsetWidth,
         height = this.container.offsetHeight,
         dpr = window.devicePixelRatio || 1,
+        renderer = this.renderer,
+        gl = renderer.getContext(),
         views = [
             {
                 left: 0,
@@ -527,10 +532,43 @@ BOTSIM.run = function () {
                 bottom: 0,
                 width: Math.floor(width / 4) * dpr,
                 height: Math.floor(height / 4) * dpr,
-                camera: this.robot.camera
+                camera: this.robot.camera,
+                postRender: (function () {
+                    var arraySize, i, j, intView,
+                        rowView1, rowView2, tempRow, rows, cols;
+                    
+                    return function () {
+                        if (!arraySize) {
+                            rows = this.height;
+                            cols = this.width;
+
+                            arraySize = rows * cols * 4;
+
+                            BOTSIM.cameraData = new Uint8Array(arraySize);
+
+                            intView = new Uint32Array(BOTSIM.cameraData.buffer);
+
+                            tempRow = new Uint32Array(cols);
+                        }
+
+                        gl.readPixels(this.left, this.bottom,
+                            this.width, this.height, gl.RGBA,
+                            gl.UNSIGNED_BYTE, BOTSIM.cameraData);
+
+                        // Flip the image data
+                        for (i = 0; i < rows / 2; i += 1) {
+                            rowView1 = intView.subarray(i * cols,
+                                (i + 1) *cols);
+                            rowView2 = intView.subarray((rows - i - 1) * cols,
+                                                        (rows - i) * cols);
+                            tempRow.set(rowView1);
+                            rowView1.set(rowView2);
+                            rowView2.set(tempRow);
+                        }
+                    };
+                }())
             }
-        ],
-        renderer = this.renderer;
+        ];
 
 
     // Animate
@@ -548,6 +586,10 @@ BOTSIM.run = function () {
             renderer.enableScissorTest(true);
 
             renderer.render(that.scene, views[i].camera);
+
+            if (views[i].postRender) {
+                views[i].postRender()
+;            }
         }
 
         window.requestAnimationFrame(run);
@@ -566,6 +608,29 @@ BOTSIM.on('scene-ready', 'run', BOTSIM);
 BOTSIM.on('tick', function () {
     this.controls.update(1);
 }, BOTSIM);
+
+BOTSIM.on('render', (function () {
+    var canvas = document.createElement('canvas'),
+        ctx = canvas.getContext('2d'),
+        dpr = window.devicePixelRatio || 1,
+        container = document.getElementById('botsim-body'),
+        imageData;
+
+    // This might be needed for a demo, but probably not
+    //container.appendChild(canvas);
+
+    return function () {
+        if (!imageData) {
+            canvas.height = Math.floor(container.offsetHeight / 4) * dpr;
+            canvas.width = Math.floor(container.offsetWidth / 4) * dpr;
+            imageData = ctx.createImageData(canvas.width, canvas.height);
+        }
+
+        imageData.data.set(BOTSIM.cameraData);
+        ctx.putImageData(imageData, 0, 0);
+        ctx.scale(1, -1);
+    };
+}()), BOTSIM);
 
 ///////////////////// GUI callbacks //////////////////////////
 
