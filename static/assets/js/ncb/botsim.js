@@ -185,7 +185,6 @@ function Robot(obj, robotType) {
 
         return false;
     };
-    BOTSIM.on('tick', obj.detectCollisions, obj);
 
     document.addEventListener( 'keydown', function (event) {
         if (event.altKey) {
