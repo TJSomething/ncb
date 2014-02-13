@@ -193,32 +193,32 @@ function Robot(obj, robotType) {
         }
 
         switch (event.keyCode) {
-            case 98: // NUM 2
+            case 83: // S
                 obj.speed = -1;
                 break;
-            case 104: // NUM 8
+            case 87: // W
                 obj.speed = 1;
                 break;
-            case 102: // NUM 6
-                obj.angularVelocity = -1;
-                break;
-            case 100: // NUM 4
+            case 65: // A
                 obj.angularVelocity = 1;
+                break;
+            case 68: // D
+                obj.angularVelocity = -1;
                 break;
         }
     }, false );
     document.addEventListener( 'keyup', function (event) {
         switch (event.keyCode) {
-            case 98: // NUM 2
+            case 83: // W
                 obj.speed = 0;
                 break;
-            case 104: // NUM 8
+            case 87: // A
                 obj.speed = 0;
                 break;
-            case 102: // NUM 6
+            case 65: // S
                 obj.angularVelocity = 0;
                 break;
-            case 100: // NUM 4
+            case 68: // D
                 obj.angularVelocity = 0;
                 break;
         }
@@ -468,9 +468,8 @@ BOTSIM.readyScene = function () {
             //  axis fixing.
             app.camera.rotateX(-Math.PI/2);
 
-            app.controls = new THREE.FlyControls(app.camera);
-            app.controls.dragToLook = true;
-            app.controls.movementSpeed *= 0.25;
+            app.controls = new THREE.OrbitControls(app.camera);
+            //app.controls.movementSpeed *= 0.25;
         }
     }
 
