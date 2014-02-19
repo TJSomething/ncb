@@ -73,6 +73,8 @@ makePublisher(BOTSIM);
 /////////////////////////// Game Logic ///////////////////////////
 // Methods that the robot needs
 function Robot(obj, robotType) {
+    var that = this;
+
     // Allow usage of new
     if (!(this instanceof Robot)) {
         return new Robot(obj, robotType);
@@ -82,11 +84,19 @@ function Robot(obj, robotType) {
     //  the robot
     obj.geometry = new THREE.Geometry();
 
+    // We're going to make a new object that isn't subject to the scaling
+    //  in the scene and won't kill accidental children
+    that = new THREE.Object3D();
+    that.position.copy(obj.position);
+    that.rotation = obj.rotation;
+    that.name = 'Robot Parent';
+    BOTSIM.scene.add(that);
+
     // Load the robot model asynchronously
-    Robot.loadModel(obj, robotType);
+    Robot.loadModel(that, robotType);
 
     // Methods for robots
-    obj.instantForward = function (displacement) {
+    that.instantForward = function (displacement) {
         var model = new THREE.Vector3(0, 0, displacement),
             world = model.applyQuaternion(this.quaternion);
 
@@ -94,23 +104,23 @@ function Robot(obj, robotType) {
         this.position.add(world);
     };
 
-    obj.instantBackward = function(displacement) {
+    that.instantBackward = function(displacement) {
         this.instantForward(-displacement);
     };
 
-    obj.instantRight = function (displacement) {
+    that.instantRight = function (displacement) {
         this.animateWalking(0, displacement);
         this.rotateY(displacement);
     };
 
-    obj.instantLeft = function (displacement) {
-        obj.instantRight(-displacement);
+    that.instantLeft = function (displacement) {
+        that.instantRight(-displacement);
     };
 
     // This finds exactly how the robot would move if
     //  it were going forward and turning at the same
     //  time.
-    obj.simultaneousTurnMove = function (ds, dtheta) {
+    that.simultaneousTurnMove = function (ds, dtheta) {
         var phi, turningRadius, dist;
 
         if (Math.abs(dtheta) > 1e-6) {
@@ -129,7 +139,7 @@ function Robot(obj, robotType) {
         this.updateMatrix();
     };
 
-    obj.move = function (dt) {
+    that.move = function (dt) {
         var ds = this.speed * dt,
             dtheta = this.angularVelocity * dt;
 
@@ -142,10 +152,10 @@ function Robot(obj, robotType) {
             this.simultaneousTurnMove(-ds, -dtheta);
         }
     };
-    BOTSIM.on('tick', obj.move, obj);
+    BOTSIM.on('tick', that.move, that);
 
 
-    obj.detectCollisions = function () {
+    that.detectCollisions = function () {
         var idx,
             originPoint = this.position.clone(),
             localVertex,
@@ -155,8 +165,8 @@ function Robot(obj, robotType) {
             collisionResults;
 
         // Lazy initialization!
-        obj.collisionVertices = obj.collisionVertices || (function () {
-            var b = obj.bounds,
+        that.collisionVertices = that.collisionVertices || (function () {
+            var b = that.bounds,
                 Vec = THREE.Vector3;
             // We're really going to be doing to do collisions with the
             //  bounding box of the robot
@@ -170,8 +180,8 @@ function Robot(obj, robotType) {
                     new Vec( b.max.x, b.max.y, b.max.z )];
         }());
 
-        for (idx = 0; idx < obj.collisionVertices.length; idx += 1) {
-            localVertex = obj.collisionVertices[idx].clone();
+        for (idx = 0; idx < that.collisionVertices.length; idx += 1) {
+            localVertex = that.collisionVertices[idx].clone();
             globalVertex = localVertex.applyMatrix4(this.matrix);
             directionVector = globalVertex.sub(this.position);
             ray = new THREE.Raycaster(originPoint, directionVector.clone().normalize());
@@ -193,41 +203,41 @@ function Robot(obj, robotType) {
 
         switch (event.keyCode) {
             case 83: // S
-                obj.speed = -1;
+                that.speed = -1;
                 break;
             case 87: // W
-                obj.speed = 1;
+                that.speed = 1;
                 break;
             case 65: // A
-                obj.angularVelocity = 1;
+                that.angularVelocity = 1;
                 break;
             case 68: // D
-                obj.angularVelocity = -1;
+                that.angularVelocity = -1;
                 break;
         }
     }, false );
     document.addEventListener( 'keyup', function (event) {
         switch (event.keyCode) {
             case 83: // W
-                obj.speed = 0;
+                that.speed = 0;
                 break;
             case 87: // A
-                obj.speed = 0;
+                that.speed = 0;
                 break;
             case 65: // S
-                obj.angularVelocity = 0;
+                that.angularVelocity = 0;
                 break;
             case 68: // D
-                obj.angularVelocity = 0;
+                that.angularVelocity = 0;
                 break;
         }
     }, false );
 
     // Properties
-    obj.speed = 0;
-    obj.angularVelocity = 0;
+    that.speed = 0;
+    that.angularVelocity = 0;
 
-    return obj;
+    return that;
 }
 
 // This loads the robot model asynchronously
@@ -282,6 +292,8 @@ Robot.modelLoaders = {
                     rleg = steve.bones[findBoneIndex('uleg.R')],
                     lleg = steve.bones[findBoneIndex('uleg.L')];
 
+                // For some weird reason, Steve is the wrong size.
+                steve.scale.set(0.66667, 0.66667, 0.66667);
 
                 obj.add(steve);
 
@@ -443,14 +455,17 @@ BOTSIM.loadScene = function (files) {
 BOTSIM.readyScene = function () {
     var app = this,
         // This is so we can do a few asynchronous tasks
-        tasksLeft = 0;
+        tasksLeft = 0,
+        camera,
+        robot,
+        light;
 
     this.initViewport();
 
     function taskDone() {
         tasksLeft -= 1;
 
-        if (tasksLeft <= 0) {
+        if (tasksLeft === 0) {
             app.fire('scene-ready');
         }
     }
@@ -468,15 +483,14 @@ BOTSIM.readyScene = function () {
             app.camera.rotateX(-Math.PI/2);
 
             app.controls = new THREE.OrbitControls(app.camera);
-            //app.controls.movementSpeed *= 0.25;
         }
     }
 
     function initRobot(obj) {
-        if (obj.name === 'Robot') {
+        if (obj.name === 'Robot' && !app.robot) {
             tasksLeft += 1;
 
-            BOTSIM.on('robot-ready', taskDone);
+            app.on('robot-ready', taskDone);
 
             // Set up our robot
             app.robot = new Robot(obj, BOTSIM.CHARACTER);
@@ -507,10 +521,38 @@ BOTSIM.readyScene = function () {
     tasksLeft += 1;
     traverse(app.scene);
 
+    // If we didn't add a camera or a robot, then place them in
+    //  reasonable locations
+    if (!app.robot) {
+        robot = new THREE.Object3D();
+        robot.position.set(0, 0, 0);
+        app.scene.add(robot);
+
+        initRobot(robot);
+    }
+
+    if (!app.camera) {
+        camera = new THREE.PerspectiveCamera( 45, app.ASPECT, 0.1, 1000 );
+        camera.position.set(5, 5, 5);
+        camera.lookAt(app.robot.position);
+        // This counters the hack used for Collada cameras
+        camera.rotateX(Math.PI/2);
+        app.scene.add(app.camera);
+
+        initCamera(camera);
+    }
+
+    // TODO: Only add lights if there are none
+    // Add some lights
+    app.scene.add(new THREE.AmbientLight( 0x222222 ));
+    light = new THREE.DirectionalLight(0xffffff, 0.7);
+    light.position.set(1, 5, 1);
+    app.scene.add(light);
+
     taskDone();
 };
 
-BOTSIM.run = function () {
+BOTSIM.startLoop = function () {
     var that = this,
         width = this.container.offsetWidth,
         height = this.container.offsetHeight,
@@ -568,7 +610,6 @@ BOTSIM.run = function () {
             }
         ];
 
-
     // Animate
     function run() {
         var i, left, bottom, width, height;
@@ -601,7 +642,7 @@ BOTSIM.run = function () {
 
 BOTSIM.on('scene-loaded', 'readyScene', BOTSIM);
 
-BOTSIM.on('scene-ready', 'run', BOTSIM);
+BOTSIM.on('scene-ready', 'startLoop', BOTSIM);
 
 BOTSIM.on('tick', function () {
     this.controls.update(1);
