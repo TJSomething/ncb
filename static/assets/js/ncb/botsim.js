@@ -1,5 +1,5 @@
 /* jslint browser: true */
-/* global THREE, $:false */
+/* global THREE, $:false, _:false */
 
 'use strict';
 
@@ -81,6 +81,23 @@ THREE.Bone.prototype.update = (function () {
 }());
 
 THREE.Object3D.prototype.update = function() {};
+
+// World position is really nice to have
+THREE.Object3D.prototype.positionWorld = function () {
+    return new THREE.Vector3().applyMatrix4(this.matrixWorld);
+};
+
+// Sometimes, we want the center more than the position
+THREE.Object3D.prototype.centerWorld = function () {
+    var targetBox = new THREE.Box3().setFromObject(this),
+        center = new THREE.Vector3();
+
+    // Find the center of the objects bounding box
+    center.addVectors(targetBox.min, targetBox.max);
+    center.multiplyScalar(0.5);
+
+    return center;
+};
 
 /////////////////////////// Game Logic ///////////////////////////
 // Methods that the robot needs
@@ -230,13 +247,13 @@ function Robot(obj, robotType) {
     }, false );
     document.addEventListener( 'keyup', function (event) {
         switch (event.keyCode) {
-            case 83: // W
+            case 83: // S
                 that.speed = 0;
                 break;
-            case 87: // A
+            case 87: // W
                 that.speed = 0;
                 break;
-            case 65: // S
+            case 65: // A
                 that.angularVelocity = 0;
                 break;
             case 68: // D
@@ -308,7 +325,11 @@ Robot.modelLoaders = {
                     leftMotionRemaining = 0,
                     rightMotionRemaining = 0,
                     leftPointTarget,
-                    rightPointTarget;
+                    rightPointTarget,
+                    forearmLength = 0.518,
+                    armLength = forearmLength - rarm.children[0].position.y,
+                    leftHandObject,
+                    rightHandObject;
 
                 // For some weird reason, Steve is the wrong size.
                 steve.scale.set(0.66667, 0.66667, 0.66667);
@@ -343,7 +364,9 @@ Robot.modelLoaders = {
                 // Add walking
                 obj.animateWalking = (function() {
                     var walkState = 0,
-                        maxLegAngle = Math.PI/9;
+                        maxLegAngle = Math.PI/9,
+                        lrleg = rleg.children[0],
+                        llleg = lleg.children[0];
 
                     return function (ds, dtheta) {
                         // Don't let undefined through
@@ -362,14 +385,11 @@ Robot.modelLoaders = {
 
                 // This anchors an object to the nearest arm
                 obj.grab = function (target) {
-                    var worldPosition = new THREE.Vector3().
-                            applyMatrix4(target.matrixWorld),
+                    var worldPosition = target.positionWorld(),
                         llarm = larm.children[0], // lower left arm
                         lrarm = rarm.children[0], // lower right arm
-                        leftElbow = new THREE.Vector3().
-                            applyMatrix4(llarm.matrixWorld),
-                        rightElbow = new THREE.Vector3().
-                            applyMatrix4(lrarm.matrixWorld),
+                        leftElbow = llarm.positionWorld(),
+                        rightElbow = lrarm.positionWorld(),
                         distToLeftElbow = worldPosition.distanceTo(leftElbow),
                         distToRightElbow = worldPosition.distanceTo(rightElbow),
                         oldParentMatrix = target.parent.matrixWorld,
@@ -391,23 +411,49 @@ Robot.modelLoaders = {
                         decompose(target.position, // And set
                             target.rotation,
                             target.scale);
+
+                    // Ignore the object for the purposes of collision detection
+                    BOTSIM.collidableMeshList = _.difference(
+                        BOTSIM.collidableMeshList,
+                        [target],
+                        target.getDescendants());
                 };
 
-                // This anchors an object to the nearest arm
-                obj.release = function (target) {
-                    var oldParentMatrix = target.parent.matrixWorld,
+                // This removes the target from the arm
+                obj.release = function (arm) {
+                    var isLeft = (arm[0] === 'l' || arm[0] === 'L'),
+                        target = isLeft ?
+                            leftHandObject : rightHandObject,
+                        oldParentMatrix,
                         reverseParentTransform = new THREE.Matrix4();
 
-                    this.parent.add(target);
-                    // Position the target properly
-                    reverseParentTransform.getInverse(
-                        target.parent.matrixWorld);
-                    reverseParentTransform. // Remove the new parent's transform
-                        multiply(oldParentMatrix). // Add the old parent's
-                        multiply(target.matrix). // Add the original transform
-                        decompose(target.position, // And set
-                            target.rotation,
-                            target.scale);
+                    if (target) {
+                        oldParentMatrix = target.parent.matrixWorld;
+
+                        this.parent.add(target);
+                        // Position the target properly
+                        reverseParentTransform.getInverse(
+                            target.parent.matrixWorld);
+                        reverseParentTransform. // Remove the new parent's transform
+                            multiply(oldParentMatrix). // Add the old parent's
+                            multiply(target.matrix). // Add the original transform
+                            decompose(target.position, // And set
+                                target.rotation,
+                                target.scale);
+
+                        // Reinstate collision detection
+                        BOTSIM.collidableMeshList.push(target);
+                        BOTSIM.collidableMeshList =
+                            BOTSIM.collidableMeshList.concat(
+                                target.getDescendants());
+
+                        // We need to note that we're holding nothing
+                        if (isLeft) {
+                            leftHandObject = undefined;
+                        } else {
+                            rightHandObject = undefined;
+                        }
+                    }
                 };
 
                 obj.setArmAngle = function (arm, horiz, vert, roll) {
@@ -500,7 +546,6 @@ Robot.modelLoaders = {
                     }
                 };
 
-                // TODO: Make this DRYer
                 // Move the arms for animation purposes
                 function moveArms(dt) {
                     function moveArm(arm, target, motionRemaining) {
@@ -512,7 +557,6 @@ Robot.modelLoaders = {
                             motionAmount;
 
                         // Calculate the axis and angle to rotate to
-                        //armDirection.copy(arm.children[0].position);
                         localMatrix.getInverse(arm.matrixWorld);
                         localTarget = target.clone().
                             applyMatrix4(localMatrix).
@@ -547,15 +591,125 @@ Robot.modelLoaders = {
                             moveArm(larm,
                                 leftPointTarget,
                                 leftMotionRemaining);
+                        if (leftMotionRemaining === 0) {
+                            BOTSIM.fire('left-arm-done');
+                        }
                     }
                     if (rightMotionRemaining > 0) {
                         rightMotionRemaining =
                             moveArm(rarm,
                                 rightPointTarget,
                                 rightMotionRemaining);
+                        if (rightMotionRemaining === 0) {
+                            BOTSIM.fire('right-arm-done');
+                        }
                     }
                 }
                 BOTSIM.on('tick', function () { moveArms(1/BOTSIM.FPS); });
+
+                function checkHandCollision(arm, target) {
+                    var isRight = arm[0] === 'r' || arm[0] === 'R',
+                        armObj = isRight ? rarm : larm,
+                        handLocation = new THREE.Vector3(0, -forearmLength, 0).
+                            applyMatrix4(armObj.children[0].matrixWorld),
+                        targetBox = new THREE.Box3().setFromObject(target);
+
+                        return targetBox.containsPoint(handLocation);
+                }
+
+                obj.pickUp = function (target) {
+                    var llarm = larm.children[0], // lower left arm
+                        lrarm = rarm.children[0], // lower right arm
+                        llarmLocation = llarm.positionWorld(),
+                        lrarmLocation = lrarm.positionWorld(),
+                        targetLocation = target.positionWorld(),
+                        llarmDist = targetLocation.distanceTo(llarmLocation),
+                        lrarmDist = targetLocation.distanceTo(lrarmLocation),
+                        isLeftCloser = llarmDist < lrarmDist,
+                        arm;
+
+                    // Which arm is used is based on distance and
+                    //  hand fullness
+                    if (( isLeftCloser  && !leftHandObject) ||
+                        (!isLeftCloser &&   rightHandObject)) {
+                        arm = 'left';
+                    } else if ((!isLeftCloser && !rightHandObject) ||
+                               ( isLeftCloser &&  leftHandObject)) {
+                        arm = 'right';
+                    }
+
+
+                    // If we have a free hand, point it at the target and,
+                    //  when it's pointed, try to grab the target
+                    if (arm) {
+                        this.pointArm(arm, target, 1);
+
+                        BOTSIM.on(arm + '-arm-done', finishPickingUp);
+                    }
+
+                    // Check if we can reach the object
+                    function finishPickingUp () {
+                        if (checkHandCollision(arm, target)) {
+                            obj.grab(target);
+
+                            if (isLeftCloser) {
+                                leftHandObject = target;
+                            } else {
+                                rightHandObject = target;
+                            }
+                        }
+
+                        BOTSIM.remove(arm + '-arm-done', finishPickingUp);
+                    }
+                };
+
+                obj.pickUpNearest = function () {
+                    var larmPos = larm.positionWorld(),
+                        rarmPos = rarm.positionWorld(),
+                        i,
+                        target,
+                        targetBox,
+                        closestTarget,
+                        closestDist = Infinity,
+                        targetDist;
+
+                    // Find the portable object that's closest to a shoulder
+                    for (i = 0; i < BOTSIM.portables.length; i += 1) {
+                        target = BOTSIM.portables[i];
+                        targetBox = new THREE.Box3().setFromObject(target);
+                        targetDist = Math.min(
+                            targetBox.distanceToPoint(larmPos),
+                            targetBox.distanceToPoint(rarmPos));
+                        if (targetDist < closestDist) {
+                            closestTarget = target;
+                            closestDist = targetDist;
+                        }
+                    }
+
+                    // If the object is in arm's length, pick it up
+                    if (closestDist < armLength) {
+                        this.pickUp(closestTarget);
+
+                        return true;
+                    } else {
+                        return false;
+                    }
+                };
+
+
+                document.addEventListener( 'keyup', function (event) {
+                    switch (event.keyCode) {
+                        case 69: // E
+                            if (leftHandObject) {
+                                obj.release('left');
+                            } else if (rightHandObject) {
+                                obj.release('right');
+                            } else {
+                                obj.pickUpNearest();
+                            }
+                            break;
+                    }
+                }, false );
 
                 BOTSIM.fire('robot-ready');
             });
@@ -790,7 +944,7 @@ BOTSIM.startLoop = function () {
                 height: Math.floor(height / 4) * dpr,
                 camera: this.robot.camera,
                 postRender: (function () {
-                    var arraySize, i, j, intView,
+                    var arraySize, i, intView,
                         rowView1, rowView2, tempRow, rows, cols;
                     
                     return function () {
