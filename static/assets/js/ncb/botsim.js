@@ -70,6 +70,18 @@ function makePublisher(o) {
 
 makePublisher(BOTSIM);
 
+// Let's deal with the fact that we can't normally attach objects
+//  to bones
+THREE.Bone.prototype.update = (function () {
+    var update = THREE.Bone.prototype.update;
+    return function (parentSkinMatrix, forceUpdate) {
+        update.call(this, parentSkinMatrix, forceUpdate);
+        this.updateMatrixWorld( true );
+    };
+}());
+
+THREE.Object3D.prototype.update = function() {};
+
 /////////////////////////// Game Logic ///////////////////////////
 // Methods that the robot needs
 function Robot(obj, robotType) {
@@ -203,10 +215,10 @@ function Robot(obj, robotType) {
 
         switch (event.keyCode) {
             case 83: // S
-                that.speed = -1;
+                that.speed = -1.7;
                 break;
             case 87: // W
-                that.speed = 1;
+                that.speed = 1.7;
                 break;
             case 65: // A
                 that.angularVelocity = 1;
@@ -290,7 +302,13 @@ Robot.modelLoaders = {
                         return Array.prototype.indexOf.bind(boneNames);
                     }()),
                     rleg = steve.bones[findBoneIndex('uleg.R')],
-                    lleg = steve.bones[findBoneIndex('uleg.L')];
+                    lleg = steve.bones[findBoneIndex('uleg.L')],
+                    rarm = steve.bones[findBoneIndex('uarm.R')],
+                    larm = steve.bones[findBoneIndex('uarm.L')],
+                    leftMotionRemaining = 0,
+                    rightMotionRemaining = 0,
+                    leftPointTarget,
+                    rightPointTarget;
 
                 // For some weird reason, Steve is the wrong size.
                 steve.scale.set(0.66667, 0.66667, 0.66667);
@@ -323,7 +341,6 @@ Robot.modelLoaders = {
                 obj.add(obj.camera);
 
                 // Add walking
-
                 obj.animateWalking = (function() {
                     var walkState = 0,
                         maxLegAngle = Math.PI/9;
@@ -342,6 +359,203 @@ Robot.modelLoaders = {
                             -maxLegAngle * Math.sin(walkState / maxLegAngle);
                     };
                 }());
+
+                // This anchors an object to the nearest arm
+                obj.grab = function (target) {
+                    var worldPosition = new THREE.Vector3().
+                            applyMatrix4(target.matrixWorld),
+                        llarm = larm.children[0], // lower left arm
+                        lrarm = rarm.children[0], // lower right arm
+                        leftElbow = new THREE.Vector3().
+                            applyMatrix4(llarm.matrixWorld),
+                        rightElbow = new THREE.Vector3().
+                            applyMatrix4(lrarm.matrixWorld),
+                        distToLeftElbow = worldPosition.distanceTo(leftElbow),
+                        distToRightElbow = worldPosition.distanceTo(rightElbow),
+                        oldParentMatrix = target.parent.matrixWorld,
+                        reverseParentTransform = new THREE.Matrix4();
+
+                    // Attach the target to the nearest arm
+                    if (distToLeftElbow < distToRightElbow) {
+                        llarm.add(target);
+                    } else {
+                        lrarm.add(target);
+                    }
+
+                    // Position the target properly
+                    reverseParentTransform.getInverse(
+                        target.parent.matrixWorld);
+                    reverseParentTransform. // Remove the new parent's transform
+                        multiply(oldParentMatrix). // Add the old parent's
+                        multiply(target.matrix). // Add the original transform
+                        decompose(target.position, // And set
+                            target.rotation,
+                            target.scale);
+                };
+
+                // This anchors an object to the nearest arm
+                obj.release = function (target) {
+                    var oldParentMatrix = target.parent.matrixWorld,
+                        reverseParentTransform = new THREE.Matrix4();
+
+                    this.parent.add(target);
+                    // Position the target properly
+                    reverseParentTransform.getInverse(
+                        target.parent.matrixWorld);
+                    reverseParentTransform. // Remove the new parent's transform
+                        multiply(oldParentMatrix). // Add the old parent's
+                        multiply(target.matrix). // Add the original transform
+                        decompose(target.position, // And set
+                            target.rotation,
+                            target.scale);
+                };
+
+                obj.setArmAngle = function (arm, horiz, vert, roll) {
+                    var armObj;
+
+                    // We're setting a specific arm
+                    if (arm[0] === 'l' || arm[0] === 'L') {
+                        armObj = larm;
+                    } else {
+                        armObj = rarm;
+                    }
+
+                    armObj.rotation.x = vert;
+                    // We need to clamp motion to force motion to be
+                    //  relatively realistic
+                    armObj.rotation.y = Math.max(-Math.PI/2,
+                        Math.min(Math.PI, roll));
+                    armObj.rotation.z = Math.max(-Math.PI/4,
+                            Math.min(3*Math.PI/4, horiz));
+                };
+
+                obj.setArmAngle = function (arm, horiz, vert, roll) {
+                    var armObj;
+
+                    // We're setting a specific arm
+                    if (arm[0] === 'l' || arm[0] === 'L') {
+                        armObj = larm;
+                    } else {
+                        armObj = rarm;
+                    }
+
+                    armObj.rotation.x = vert;
+                    // We need to clamp motion to force motion to be
+                    //  relatively realistic
+                    armObj.rotation.y = Math.max(-Math.PI/2,
+                        Math.min(Math.PI, roll));
+                    armObj.rotation.z = Math.max(-Math.PI/4,
+                            Math.min(3*Math.PI/4, horiz));
+                };
+
+                obj.changeArmAngle = function (arm, horiz, vert, roll) {
+                    var armObj;
+
+                    // We're setting a specific arm
+                    if (arm[0] === 'l' || arm[0] === 'L') {
+                        armObj = larm;
+                    } else {
+                        armObj = rarm;
+                    }
+
+                    armObj.rotation.x = armObj.rotation.x + vert;
+                    // We need to clamp motion to force motion to be
+                    //  relatively realistic
+                    armObj.rotation.y =
+                        Math.max(-Math.PI/2,
+                            Math.min(Math.PI,
+                                armObj.rotation.y + roll));
+                    armObj.rotation.z =
+                        Math.max(-Math.PI/4,
+                            Math.min(3*Math.PI/4,
+                                armObj.rotation.z + horiz));
+                };
+
+                obj.flexShoulder = function (arm, amount) {
+                    this.changeArmAngle(arm, 0, -amount, 0);
+                };
+
+                obj.adductShoulder = function (arm, amount) {
+                    this.changeArmAngle(arm, amount, 0, 0);
+                };
+
+                obj.rotateShoulder = function (arm, amount) {
+                    this.changeArmAngle(arm, 0, 0, -amount);
+                };
+
+                obj.pointArm = function (arm, target, duration) {
+                    var targetBox = new THREE.Box3().setFromObject(target),
+                        targetCenter = new THREE.Vector3();
+
+                    // Find the center of the objects bounding box
+                    targetCenter.addVectors(targetBox.min, targetBox.max);
+                    targetCenter.multiplyScalar(0.5);
+
+                    if (arm[0] === 'l' || arm[0] === 'L') {
+                        leftMotionRemaining = duration;
+                        leftPointTarget = targetCenter;
+                    } else {
+                        rightMotionRemaining = duration;
+                        rightPointTarget = targetCenter;
+                    }
+                };
+
+                // TODO: Make this DRYer
+                // Move the arms for animation purposes
+                function moveArms(dt) {
+                    function moveArm(arm, target, motionRemaining) {
+                        var localTarget,
+                            localMatrix = new THREE.Matrix4(),
+                            armDirection = new THREE.Vector3(0, -1, 0),
+                            axis = new THREE.Vector3(),
+                            angle,
+                            motionAmount;
+
+                        // Calculate the axis and angle to rotate to
+                        //armDirection.copy(arm.children[0].position);
+                        localMatrix.getInverse(arm.matrixWorld);
+                        localTarget = target.clone().
+                            applyMatrix4(localMatrix).
+                            normalize();
+                        armDirection.normalize();
+                        axis.crossVectors(armDirection, localTarget).
+                            normalize();
+                        // Order on the dot product matters, because
+                        //  armDirection is a Vector4
+                        angle = Math.acos(localTarget.dot(armDirection));
+
+                        // Calculate how much we're going to move toward our
+                        //  target angle
+                        if (dt > motionRemaining) {
+                            // If we get there within the frame,
+                            //  then say we move all the way
+                            motionAmount = 1;
+                            motionRemaining = 0;
+                        } else {
+                            motionAmount = dt/motionRemaining;
+                            motionRemaining -= dt;
+                        }
+
+                        // Actually rotate
+                        arm.rotateOnAxis(axis, motionAmount * angle);
+
+                        return motionRemaining;
+                    }
+
+                    if (leftMotionRemaining > 0) {
+                        leftMotionRemaining =
+                            moveArm(larm,
+                                leftPointTarget,
+                                leftMotionRemaining);
+                    }
+                    if (rightMotionRemaining > 0) {
+                        rightMotionRemaining =
+                            moveArm(rarm,
+                                rightPointTarget,
+                                rightMotionRemaining);
+                    }
+                }
+                BOTSIM.on('tick', function () { moveArms(1/BOTSIM.FPS); });
 
                 BOTSIM.fire('robot-ready');
             });
@@ -384,7 +598,6 @@ BOTSIM.loadScene = function (files) {
 
             reader.onload = function () {
                 imageLibrary[name] = reader.result;
-
                 taskDone();
             };
 
@@ -497,6 +710,15 @@ BOTSIM.readyScene = function () {
         }
     }
 
+    app.portables = [];
+    function initPortable(obj) {
+        // If the word portable is in the name of the object,
+        //  add it to the portable list
+        if (/portable/i.test(obj.name)) {
+            app.portables.push(obj);
+        }
+    }
+
     app.collidableMeshList = [];
     function addCollidable(obj) {
         if (obj.hasOwnProperty('geometry') &&
@@ -505,21 +727,15 @@ BOTSIM.readyScene = function () {
         }
     }
 
-    function traverse(obj) {
-        var i;
-
-        // Try to initialize the current object
+    function initObject(obj) {
         initCamera(obj);
         initRobot(obj);
+        initPortable(obj);
         addCollidable(obj);
-
-        for (i = 0; i < obj.children.length; i += 1) {
-            traverse(obj.children[i]);
-        }
     }
 
     tasksLeft += 1;
-    traverse(app.scene);
+    app.scene.traverse(initObject);
 
     // If we didn't add a camera or a robot, then place them in
     //  reasonable locations
