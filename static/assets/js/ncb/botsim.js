@@ -380,6 +380,10 @@ Robot.modelLoaders = {
                             maxLegAngle * Math.sin(walkState / maxLegAngle);
                         lleg.rotation.x =
                             -maxLegAngle * Math.sin(walkState / maxLegAngle);
+                        lrleg.rotation.x = maxLegAngle -
+                            maxLegAngle * Math.cos(walkState / maxLegAngle);
+                        llleg.rotation.x = maxLegAngle +
+                            maxLegAngle * Math.cos(walkState / maxLegAngle);
                     };
                 }());
 
