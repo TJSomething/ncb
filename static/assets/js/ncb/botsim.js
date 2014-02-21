@@ -1,5 +1,5 @@
 /* jslint browser: true */
-/* global THREE, $:false, _:false */
+/* global THREE, $:false, _:false, Stats */
 
 'use strict';
 
@@ -722,11 +722,13 @@ Robot.modelLoaders = {
 
 
 BOTSIM.initViewport = function () {
-    var width, height;
+    var width, height, left, top;
 
     this.container = document.getElementById('botsim-body');
     width = this.container.offsetWidth;
     height = width / this.ASPECT;
+    left = this.container.offsetLeft;
+    top = this.container.offsetTop;
 
     this.renderer = new THREE.WebGLRenderer({
         antialias: true,
@@ -736,6 +738,21 @@ BOTSIM.initViewport = function () {
     this.renderer.setSize(width, height);
 
     this.container.appendChild(this.renderer.domElement);
+    
+    // FPS indicators
+    this.renderStats = new Stats();
+    this.renderStats.domElement.style.position = 'absolute';
+    this.renderStats.domElement.style.top = top + 'px';
+    this.renderStats.domElement.style.left = left + 'px';
+    this.renderStats.setMode(1);
+    this.container.appendChild(this.renderStats.domElement);
+    
+    this.logicStats = new Stats();
+    this.logicStats.domElement.style.position = 'absolute';
+    this.logicStats.domElement.style.top = top + 50 + 'px';
+    this.logicStats.domElement.style.left = left + 'px';
+    this.logicStats.setMode(1);
+    this.container.appendChild(this.logicStats.domElement);
 };
 
 BOTSIM.loadScene = function (files) {
@@ -987,6 +1004,8 @@ BOTSIM.startLoop = function () {
     // Animate
     function run() {
         var i, left, bottom, width, height;
+        
+       that.renderStats.begin();
 
         for (i = 0; i < views.length; i += 1) {
             left = views[i].left;
@@ -1006,12 +1025,20 @@ BOTSIM.startLoop = function () {
         }
 
         window.requestAnimationFrame(run);
+        
+        that.renderStats.end();
+        
         that.fire('render');
     }
     run();
 
     // A physics and stuff loop
-    window.setInterval(this.fire.bind(this, 'tick', 1/this.FPS), 1000/this.FPS);
+    window.setInterval(
+        function () {
+            that.logicStats.begin();
+            that.fire('tick', 1/that.FPS);
+            that.logicStats.end();
+        }, 1000/this.FPS);
 };
 
 BOTSIM.on('scene-loaded', 'readyScene', BOTSIM);
