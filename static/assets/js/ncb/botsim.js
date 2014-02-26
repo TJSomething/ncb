@@ -838,7 +838,7 @@ BOTSIM.loadScene = function (files) {
     taskDone();
 };
 
-// This grabs objects in the scene that are important so that
+// This grabs and modifies objects in the scene that are important so that
 //  the simulation can use them.
 BOTSIM.readyScene = function () {
     var app = this,
@@ -902,11 +902,57 @@ BOTSIM.readyScene = function () {
         }
     }
 
+    function fixTextures(obj) {
+        function resizeNPOTImage(image) {
+            var canvas, ctx;
+            function isPowerOfTwo(x) {
+                return (x & (x - 1)) === 0;
+            }
+             
+            function nextHighestPowerOfTwo(x) {
+                --x;
+                for (var i = 1; i < 32; i <<= 1) {
+                    x = x | x >> i;
+                }
+                return x + 1;
+            }
+            if (!isPowerOfTwo(image.width) || !isPowerOfTwo(image.height)) {
+                // Scale up the texture to the next highest power of two dimensions.
+                canvas = document.createElement('canvas');
+                canvas.width = nextHighestPowerOfTwo(image.width);
+                canvas.height = nextHighestPowerOfTwo(image.height);
+                ctx = canvas.getContext('2d');
+                ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+                image = canvas;
+            }
+            return image;
+        }
+
+        function fixMaterial(material) {
+            ['lightMap', 'specularMap', 'envMap', 'map'].forEach(
+                function (mapType) {
+                    if (material[mapType]) {
+                        material[mapType].image =
+                            resizeNPOTImage(material[mapType].image);
+                    }
+                });
+        }
+
+        if (obj.material) {
+            if (obj.material.materials) {
+                obj.material.materials.forEach(fixMaterial);
+            } else {
+                fixMaterial(obj.material);
+            }
+        }
+    }
+
     function initObject(obj) {
         initCamera(obj);
         initRobot(obj);
         initPortable(obj);
         addCollidable(obj);
+        fixTextures(obj);
     }
 
     tasksLeft += 1;
