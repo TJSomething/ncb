@@ -329,10 +329,11 @@ Robot.modelLoaders = {
                     forearmLength = 0.518,
                     armLength = forearmLength - rarm.children[0].position.y,
                     leftHandObject,
-                    rightHandObject;
+                    rightHandObject,
+                    scale = 2/3;
 
                 // For some weird reason, Steve is the wrong size.
-                steve.scale.set(0.66667, 0.66667, 0.66667);
+                steve.scale.set(scale, scale, scale);
 
                 obj.add(steve);
 
@@ -691,7 +692,7 @@ Robot.modelLoaders = {
                     }
 
                     // If the object is in arm's length, pick it up
-                    if (closestDist < armLength) {
+                    if (closestDist < armLength * scale) {
                         this.pickUp(closestTarget);
 
                         return true;
