@@ -610,7 +610,7 @@ Robot.modelLoaders = {
                         }
                     }
                 }
-                BOTSIM.on('tick', function () { moveArms(1/BOTSIM.FPS); });
+                BOTSIM.on('tick', function (dt) { moveArms(dt); });
 
                 function checkHandCollision(arm, target) {
                     var isRight = arm[0] === 'r' || arm[0] === 'R',
@@ -1080,20 +1080,32 @@ BOTSIM.startLoop = function () {
     run();
 
     // A physics and stuff loop
-    window.setInterval(
-        function () {
-            that.logicStats.begin();
-            that.fire('tick', 1/that.FPS);
-            that.logicStats.end();
-        }, 1000/this.FPS);
+    (function () {
+        var time = Date.now()/1000,
+            accumulator = 0,
+            tickLength = 1/that.FPS;
+
+        window.setInterval(
+            function () {
+                accumulator += Date.now()/1000 - time;
+                time = Date.now()/1000;
+
+                while (accumulator > tickLength) {
+                    that.logicStats.begin();
+                    that.fire('tick', tickLength);
+                    that.logicStats.end();
+                    accumulator -= tickLength;
+                }
+            }, tickLength);
+    }());
 };
 
 BOTSIM.on('scene-loaded', 'readyScene', BOTSIM);
 
 BOTSIM.on('scene-ready', 'startLoop', BOTSIM);
 
-BOTSIM.on('tick', function () {
-    this.controls.update(1);
+BOTSIM.on('tick', function (dt) {
+    this.controls.update(60 * dt);
 }, BOTSIM);
 
 BOTSIM.on('render', (function () {
