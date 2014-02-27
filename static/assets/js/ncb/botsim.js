@@ -587,6 +587,7 @@ Robot.modelLoaders = {
 
                         // Actually rotate
                         arm.rotateOnAxis(axis, motionAmount * angle);
+                        arm.updateMatrixWorld();
 
                         return motionRemaining;
                     }
