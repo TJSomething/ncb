@@ -761,7 +761,9 @@ BOTSIM.loadScene = function (files) {
         i,
         imageLibrary = {},
         sceneSource,
-        app = this;
+        sceneURL,
+        app = this,
+        fileType = 'dae';
 
     // Loads each file
     function loadFile(file) {
@@ -781,12 +783,25 @@ BOTSIM.loadScene = function (files) {
         } else if (name.slice(-3).toLowerCase() === 'dae') {
             tasksLeft += 1;
 
+            fileType = 'dae';
+
             reader.onload = function () {
                 sceneSource = reader.result;
                 taskDone();
             };
 
             reader.readAsText(file);
+        } else if (name.slice(-3).toLowerCase() === 'kmz') {
+            tasksLeft += 1;
+
+            fileType = 'kmz';
+
+            reader.onload = function () {
+                sceneURL = reader.result;
+                taskDone();
+            };
+
+            reader.readAsDataURL(file);
         }
     }
 
@@ -804,7 +819,7 @@ BOTSIM.loadScene = function (files) {
 
         // Make sure it's ready
         if (tasksLeft <= 0) {
-            if (sceneSource) {
+            if (fileType === 'dae' && sceneSource) {
                 // Place the image data into the scene source
                 for (imageName in imageLibrary) {
                     if (imageLibrary.hasOwnProperty(imageName)) {
@@ -820,6 +835,15 @@ BOTSIM.loadScene = function (files) {
                     'application/xml');
                 
                 loader.parse(xml, function (obj) {
+                    app.scene = new THREE.Scene();
+                    app.scene.add(obj.scene);
+
+                    app.fire('scene-loaded');
+                });
+            } else if (fileType === 'kmz' && sceneURL) {
+                loader = new THREE.KMZLoader(loader);
+
+                loader.load(sceneURL, function (obj) {
                     app.scene = new THREE.Scene();
                     app.scene.add(obj.scene);
 
