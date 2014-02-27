@@ -1114,12 +1114,13 @@ BOTSIM.startLoop = function () {
                 accumulator += Date.now()/1000 - time;
                 time = Date.now()/1000;
 
-                while (accumulator > tickLength) {
+                if (accumulator > tickLength) {
                     that.logicStats.begin();
-                    that.fire('tick', tickLength);
+                    that.fire('tick', accumulator - (accumulator % tickLength));
+                    accumulator %= tickLength;
                     that.logicStats.end();
-                    accumulator -= tickLength;
                 }
+
             }, tickLength);
     }());
 };
