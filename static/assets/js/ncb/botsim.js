@@ -183,48 +183,72 @@ function Robot(obj, robotType) {
     };
     BOTSIM.on('tick', that.move, that);
 
+    /** Updates the collision box
+     *  The argment forceUpdate, if set to true, will update the
+     *   collision box, even if one already exists.
+     */
+    that.updateCollisionBox = function (forceUpdate) {
+        if (!that.collisionVertices || forceUpdate) {
+            that.collisionVertices = (function () {
+                    var b = (new THREE.Box3()).setFromObject(that),
+                        Vec = THREE.Vector3,
+                        invMatrixWorld = (new THREE.Matrix4()).
+                            getInverse(that.matrixWorld);
+
+                    // The bounding box should be in local space
+                    b.applyMatrix4(invMatrixWorld);
+
+                    // We're really going to be doing to do collisions with the
+                    //  bounding box of the robot
+                    return [new Vec( b.min.x, b.min.y, b.min.z ),
+                            new Vec( b.min.x, b.min.y, b.max.z ),
+                            new Vec( b.min.x, b.max.y, b.min.z ),
+                            new Vec( b.min.x, b.max.y, b.max.z ),
+                            new Vec( b.max.x, b.min.y, b.min.z ),
+                            new Vec( b.max.x, b.min.y, b.max.z ),
+                            new Vec( b.max.x, b.max.y, b.min.z ),
+                            new Vec( b.max.x, b.max.y, b.max.z )];
+                }());
+        }
+    };
+    
 
     that.detectCollisions = function () {
-        var idx,
-            originPoint = this.position.clone(),
-            localVertex,
-            globalVertex,
-            directionVector,
-            ray,
-            collisionResults;
+        // Initialize the collision box
+        that.updateCollisionBox();
 
-        // Lazy initialization!
-        that.collisionVertices = that.collisionVertices || (function () {
-            var b = that.bounds,
-                Vec = THREE.Vector3;
-            // We're really going to be doing to do collisions with the
-            //  bounding box of the robot
-            return [new Vec( b.min.x, b.min.y, b.min.z ),
-                    new Vec( b.min.x, b.min.y, b.max.z ),
-                    new Vec( b.min.x, b.max.y, b.min.z ),
-                    new Vec( b.min.x, b.max.y, b.max.z ),
-                    new Vec( b.max.x, b.min.y, b.min.z ),
-                    new Vec( b.max.x, b.min.y, b.max.z ),
-                    new Vec( b.max.x, b.max.y, b.min.z ),
-                    new Vec( b.max.x, b.max.y, b.max.z )];
-        }());
+        that.detectCollisions = function () {
+            var idx,
+                originPoint = this.position.clone(),
+                localVertex,
+                globalVertex,
+                directionVector,
+                ray,
+                collisionResults;
 
-        for (idx = 0; idx < that.collisionVertices.length; idx += 1) {
-            localVertex = that.collisionVertices[idx].clone();
-            globalVertex = localVertex.applyMatrix4(this.matrix);
-            directionVector = globalVertex.sub(this.position);
-            ray = new THREE.Raycaster(originPoint, directionVector.clone().normalize());
-            collisionResults = ray.intersectObjects(BOTSIM.collidableMeshList);
-
-            if (collisionResults.length > 0 &&
-                collisionResults[0].distance < directionVector.length()) {
-                return true;
+            if (!that.collisionVertices) {
+                that.updateCollisionBox();
             }
-        }
 
-        return false;
+            for (idx = 0; idx < that.collisionVertices.length; idx += 1) {
+                localVertex = that.collisionVertices[idx].clone();
+                globalVertex = localVertex.applyMatrix4(this.matrix);
+                directionVector = globalVertex.sub(this.position);
+                ray = new THREE.Raycaster(originPoint, directionVector.clone().normalize());
+                collisionResults = ray.intersectObjects(BOTSIM.collidableMeshList);
+
+                if (collisionResults.length > 0 &&
+                    collisionResults[0].distance < directionVector.length()) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        that.detectCollisions();
     };
-
+    
     document.addEventListener( 'keydown', function (event) {
         if (event.altKey) {
             return;
@@ -417,11 +441,13 @@ Robot.modelLoaders = {
                             target.rotation,
                             target.scale);
 
-                    // Ignore the object for the purposes of collision detection
+                    // Move the collision detection for the object from the
+                    //  world to the robot
                     BOTSIM.collidableMeshList = _.difference(
                         BOTSIM.collidableMeshList,
                         [target],
                         target.getDescendants());
+                    obj.updateCollisionBox(true);
                 };
 
                 // This removes the target from the arm
@@ -451,6 +477,9 @@ Robot.modelLoaders = {
                         BOTSIM.collidableMeshList =
                             BOTSIM.collidableMeshList.concat(
                                 target.getDescendants());
+
+                        // Resize the robot bounding box
+                        obj.updateCollisionBox(true);
 
                         // We need to note that we're holding nothing
                         if (isLeft) {
