@@ -1,5 +1,5 @@
 /* jslint browser: true */
-/* global THREE, $:false, _:false, Stats */
+/* global THREE, $:false, _:false, Stats, Physijs, console */
 
 'use strict';
 
@@ -17,6 +17,10 @@ window.requestAnimationFrame = window.requestAnimationFrame ||
                                window.mozRequestAnimationFrame ||
                                window.webkitRequestAnimationFrame ||
                                window.msRequestAnimationFrame;
+
+// Setup Physijs
+Physijs.scripts.worker = '/assets/js/lib/physijs_worker.js';
+Physijs.scripts.ammo = '/assets/js/lib/ammo.fast.js';
 
 // A nice implementation of the observer pattern from
 //  Javascript patterns by Stoyan Stefanov
