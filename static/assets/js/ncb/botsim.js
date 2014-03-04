@@ -791,7 +791,7 @@ BOTSIM.loadScene = function (files) {
         i,
         imageLibrary = {},
         sceneSource,
-        sceneURL,
+        sceneBuffer,
         app = this,
         fileType = 'dae';
 
@@ -827,11 +827,11 @@ BOTSIM.loadScene = function (files) {
             fileType = 'kmz';
 
             reader.onload = function () {
-                sceneURL = reader.result;
+                sceneBuffer = reader.result;
                 taskDone();
             };
 
-            reader.readAsDataURL(file);
+            reader.readAsArrayBuffer(file);
         }
     }
 
@@ -870,10 +870,10 @@ BOTSIM.loadScene = function (files) {
 
                     app.fire('scene-loaded');
                 });
-            } else if (fileType === 'kmz' && sceneURL) {
+            } else if (fileType === 'kmz' && sceneBuffer) {
                 loader = new THREE.KMZLoader(loader);
 
-                loader.load(sceneURL, function (obj) {
+                loader.parse(sceneBuffer, function (obj) {
                     app.scene = new THREE.Scene();
                     app.scene.add(obj.scene);
 
