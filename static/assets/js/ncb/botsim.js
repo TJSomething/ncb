@@ -1,5 +1,5 @@
 /* jslint browser: true */
-/* global THREE, $:false, _:false, Stats, Physijs, console */
+/* global THREE, $:false, _:false, Stats, console */
 
 'use strict';
 
@@ -17,10 +17,6 @@ window.requestAnimationFrame = window.requestAnimationFrame ||
                                window.mozRequestAnimationFrame ||
                                window.webkitRequestAnimationFrame ||
                                window.msRequestAnimationFrame;
-
-// Setup Physijs
-Physijs.scripts.worker = '/assets/js/lib/physijs_worker.js';
-Physijs.scripts.ammo = '/assets/js/lib/ammo.fast.js';
 
 // A nice implementation of the observer pattern from
 //  Javascript patterns by Stoyan Stefanov
@@ -187,12 +183,10 @@ function Robot(obj, robotType) {
     };
     BOTSIM.on('tick', that.move, that);
 
-    /** Updates the collision box
-     *  The argment forceUpdate, if set to true, will update the
-     *   collision box, even if one already exists.
+    /** Sets up the collision box, if not set
      */
-    that.updateCollisionBox = function (forceUpdate) {
-        if (!that.collisionVertices || forceUpdate) {
+    that.setupCollisionBox = function () {
+        if (!that.collisionVertices) {
             that.collisionVertices = (function () {
                     var b = (new THREE.Box3()).setFromObject(that),
                         Vec = THREE.Vector3,
@@ -215,11 +209,10 @@ function Robot(obj, robotType) {
                 }());
         }
     };
-    
 
     that.detectCollisions = function () {
         // Initialize the collision box
-        that.updateCollisionBox();
+        that.setupCollisionBox();
 
         that.detectCollisions = function () {
             var idx,
@@ -229,10 +222,6 @@ function Robot(obj, robotType) {
                 directionVector,
                 ray,
                 collisionResults;
-
-            if (!that.collisionVertices) {
-                that.updateCollisionBox();
-            }
 
             for (idx = 0; idx < that.collisionVertices.length; idx += 1) {
                 localVertex = that.collisionVertices[idx].clone();
@@ -312,6 +301,7 @@ Robot.modelLoaders = {
 
                 robotObj.scale.set(0.2, 0.2, 0.2);
                 obj.add(robotObj);
+                BOTSIM.physics.addObject(obj, {isStatic: false});
 
                 // Place a camera in the robot
                 // Find the bounding box
@@ -364,6 +354,7 @@ Robot.modelLoaders = {
                 steve.scale.set(scale, scale, scale);
 
                 obj.add(steve);
+                BOTSIM.physics.addObject(obj, {isStatic: false});
 
                 for (i = 0; i < materials.length; i += 1) {
                     // For bones
@@ -451,7 +442,6 @@ Robot.modelLoaders = {
                         BOTSIM.collidableMeshList,
                         [target],
                         target.getDescendants());
-                    obj.updateCollisionBox(true);
                 };
 
                 // This removes the target from the arm
@@ -481,9 +471,6 @@ Robot.modelLoaders = {
                         BOTSIM.collidableMeshList =
                             BOTSIM.collidableMeshList.concat(
                                 target.getDescendants());
-
-                        // Resize the robot bounding box
-                        obj.updateCollisionBox(true);
 
                         // We need to note that we're holding nothing
                         if (isLeft) {
@@ -950,14 +937,30 @@ BOTSIM.readyScene = function () {
         //  add it to the portable list
         if (/portable/i.test(obj.name)) {
             app.portables.push(obj);
+            app.physics.addObject(obj, {isStatic: false});
         }
     }
 
     app.collidableMeshList = [];
     function addCollidable(obj) {
+        var isThisPortable = false,
+            ancestor = obj;
         if (obj.hasOwnProperty('geometry') &&
             obj.name !== 'Robot') {
             app.collidableMeshList.push(obj);
+
+            // Only add collidable mesh if none of the parents are portable
+            while (ancestor) {
+                if (/portable/i.test(ancestor.name) ||
+                    ancestor.name === 'Robot') {
+                    isThisPortable = true;
+                }
+                ancestor = ancestor.parent;
+            }
+
+            if (!isThisPortable) {
+                app.physics.addObject(obj);
+            }
         }
     }
 
@@ -1015,6 +1018,8 @@ BOTSIM.readyScene = function () {
     }
 
     tasksLeft += 1;
+    // So that we have reasonable matrices for the children
+    app.scene.updateMatrixWorld();
     app.scene.traverse(initObject);
 
     // If we didn't add a camera or a robot, then place them in
@@ -1125,8 +1130,8 @@ BOTSIM.startLoop = function () {
             renderer.render(that.scene, views[i].camera);
 
             if (views[i].postRender) {
-                views[i].postRender()
-;            }
+                views[i].postRender();
+            }
         }
 
         window.requestAnimationFrame(run);
@@ -1159,6 +1164,645 @@ BOTSIM.startLoop = function () {
     }());
 };
 
+BOTSIM.physics = (function () {
+    var staticObjects = [],
+        dynamicObjects = [],
+        EPSILON = 0.000001;
+
+    function initDynamicCollision(obj) {
+        var bWorld = (new THREE.Box3()).setFromObject(obj.geometry),
+            Vec = THREE.Vector3,
+            invMatrixWorld = (new THREE.Matrix4()).
+                getInverse(obj.geometry.matrixWorld),
+            // In local coordinates
+            b = bWorld.clone().applyMatrix4(invMatrixWorld);
+
+        // We're really going to be doing to do collisions with the
+        //  bounding box
+        obj.physics.collisionVertices =
+           [new Vec( b.min.x, b.min.y, b.min.z ),
+            new Vec( b.min.x, b.min.y, b.max.z ),
+            new Vec( b.min.x, b.max.y, b.min.z ),
+            new Vec( b.min.x, b.max.y, b.max.z ),
+            new Vec( b.max.x, b.min.y, b.min.z ),
+            new Vec( b.max.x, b.min.y, b.max.z ),
+            new Vec( b.max.x, b.max.y, b.min.z ),
+            new Vec( b.max.x, b.max.y, b.max.z )];
+
+        obj.physics.boundingSphere =
+            b.getBoundingSphere();
+
+        Object.defineProperty(obj.physics, 'boundingSphereWorld',
+            {
+                get: function() {
+                    return obj.physics.boundingSphere.clone().
+                        applyMatrix4(obj.geometry.matrixWorld);
+                }
+            });
+
+        Object.defineProperty(obj.physics, 'orientedBoundingBox',
+            {
+                get: (function () {
+                        var c = obj.physics.boundingSphere.center,
+                            // Half extents
+                            e =  bWorld.max.clone().
+                                sub(bWorld.min).
+                                divideScalar(2),
+                            mat = obj.geometry.matrixWorld;
+
+                        return function () {
+                            return {
+                                // Put center into global coordinates
+                                c: c.clone().applyMatrix4(mat),
+                                // Decompose matrix into bases
+                                u: (function () {
+                                    var x = new Vec(mat.elements[0],
+                                                    mat.elements[1],
+                                                    mat.elements[2]),
+                                        y = new Vec(mat.elements[4],
+                                                    mat.elements[5],
+                                                    mat.elements[6]),
+                                        z = new Vec(mat.elements[8],
+                                                    mat.elements[9],
+                                                    mat.elements[10]);
+
+                                    return [x.normalize(),
+                                            y.normalize(),
+                                            z.normalize()];
+                                }()),
+                                e: e
+                            };
+                        };
+                    }())
+            });
+
+        obj.physics.orientedBox = (function () {
+            var c = obj.physics.boundingSphere.center,
+                // Half extents
+                e =  bWorld.max.clone().sub(bWorld.min).divideScalar(2),
+                mat = obj.geometry.matrixWorld;
+
+            return function () {
+                return {
+                    // Put center into global coordinates
+                    c: c.clone().applyMatrix4(mat),
+                    // Decompose matrix into bases
+                    u: (function () {
+                        var x = new Vec(mat.elements[0],
+                                        mat.elements[1],
+                                        mat.elements[2]),
+                            y = new Vec(mat.elements[4],
+                                        mat.elements[5],
+                                        mat.elements[6]),
+                            z = new Vec(mat.elements[8],
+                                        mat.elements[9],
+                                        mat.elements[10]);
+
+                        return [x.normalize(),
+                                y.normalize(),
+                                z.normalize()];
+                    }()),
+                    e: e
+                };
+            };
+        }());
+    }
+
+    function initStaticCollision(obj) {
+        obj.physics.faces = getGlobalFaces(obj);
+        obj.physics.boundingSphereWorld =
+            new THREE.Sphere().setFromPoints(
+                obj.geometry.geometry.vertices);
+        obj.physics.boundingSphereWorld.applyMatrix4(
+            obj.geometry.matrixWorld);
+    }
+
+    function getGlobalFaces(obj) {
+        var vertices = obj.geometry.geometry.vertices,
+            matrixWorld = obj.geometry.matrixWorld,
+            // Transform our vertices into global coordinates
+            globalVertices;
+
+        if (vertices) {
+            globalVertices = vertices.map(function (vertex) {
+                return vertex.clone().applyMatrix4(matrixWorld);
+            });
+            return obj.geometry.geometry.faces.map(function (face) {
+                return [globalVertices[face.a],
+                        globalVertices[face.b],
+                        globalVertices[face.c]];
+            });
+        } else {
+            return [];
+        }
+    }
+
+    // Adds the object to the physics engine
+    function addObject(obj, physicalProperties) {
+        var physicsObj = {
+            geometry: obj,
+            physics: (function () {
+                var p = physicalProperties || {};
+
+                return {
+                    position: obj.positionWorld(),
+                    velocity: p.velocity || new THREE.Vector3(0, 0, 0),
+                    state: p.state || 'rest',
+                    // The object should be static if this flag is not passed,
+                    //  or to the passed value
+                    isStatic: p.isStatic === undefined || p.isStatic
+                };
+            }())
+        };
+
+        if (physicsObj.physics.isStatic) {
+            initStaticCollision(physicsObj);
+            staticObjects.push(physicsObj);
+        } else {
+            initDynamicCollision(physicsObj);
+            dynamicObjects.push(physicsObj);
+        }
+    }
+
+    function updateObjects(dt) {
+        var i,
+            lastPosition,
+            position,
+            velocity;
+
+        // Update position and velocity
+        for (i = 0; i < dynamicObjects.length; i += 1) {
+            lastPosition = dynamicObjects[i].physics.position;
+            position = dynamicObjects[i].geometry.positionWorld();
+            velocity = position.
+                clone().
+                sub(lastPosition).
+                divideScalar(dt);
+
+            dynamicObjects[i].physics.position = position;
+            dynamicObjects[i].physics.velocity = velocity;
+        }
+    }
+
+    // Takes a dynamic physics object and finds if it's colliding with
+    //  any static objects
+    function detectStaticCollision(obj) {
+        var obb = obj.physics.orientedBoundingBox,
+            sphere = obj.physics.boundingSphereWorld;
+        // Check if any face of any object intersects with
+        //  this object's bounding box
+        return staticObjects.some(function (obj2) {
+            return obj2.physics.faces.some(function (face) {
+                // Broad phase test with spheres
+                if (sphere.intersectsSphere(
+                        obj2.physics.boundingSphereWorld)) {
+                    return testOBBTri(obb, face);
+                }
+
+                return false;
+            });
+        });
+    }
+
+    function testOBBOBB(a, b) {
+        var ra = 0,
+            rb = 0,
+            R = new THREE.Matrix3(),
+            AbsR = new THREE.Matrix3(),
+            i, j,
+            t = new THREE.Vector3(),
+            // Putting these into arrays for for-loops
+            tArr,
+            ae = [a.e.x, a.e.y, a.e.z],
+            be = [b.e.x, b.e.y, b.e.z];
+
+        // Compute rotation matrix expressing b in a's coordinate frame
+        for (i = 0; i < 3; i += 1) {
+            for (j = 0; j < 3; j += 1) {
+                R.elements[3 * j + i] = a.u[i].dot(b.u[j]);
+            }
+        }
+
+        // Compute translation vector t
+        t.subVectors(b.c, a.c);
+        // Bring translation into a's coordinate frame
+        t = new THREE.Vector3(
+            t.dot(a.u[0]),
+            t.dot(a.u[1]),
+            t.dot(a.u[2]));
+        tArr = [t.x, t.y, t.z];
+
+        // Compute common subexpressions. Add in an epsilon term to
+        // counteract arthimetic errors when two edges are parallel and
+        // their cross product is (near) null
+        for (i = 0; i < 3; i += 1) {
+            for (j = 0; j < 3; j += 1) {
+                AbsR.elements[3 * j + i] =
+                    Math.abs(R.elements[3 * j + i]) + EPSILON;
+            }
+        }
+
+        // Test axes L = A0, L = A1, L = A2
+        for (i = 0; i < 3; i += 1) {
+            ra = ae[i];
+            rb = b.e.x * AbsR.elements[i] +
+                 b.e.y * AbsR.elements[3 + i] +
+                 b.e.z * AbsR.elements[6 + i];
+            if (Math.abs(tArr[i]) > ra + rb) {
+                return false;
+            }
+        }
+
+        // Test axes L = B0, L = B1, L = B2
+        for (i = 0; i < 3; i += 1) {
+            ra = a.e.x * AbsR.elements[3 * i] +
+                 a.e.y * AbsR.elements[3 * i + 1] +
+                 a.e.z * AbsR.elements[3 * i + 2];
+            rb = be[i];
+            if (Math.abs(t.x * R.elements[3 * i] +
+                         t.y * R.elements[3 * i + 1] +
+                         t.z * R.elements[3 * i + 2]) > ra + rb) {
+                return false;
+            }
+        }
+        
+
+        // Test axis L = A0 x B0
+        ra = ae[1] * AbsR.elements[3 * 0 + 2] +
+             ae[2] * AbsR.elements[3 * 0 + 1];
+        rb = be[1] * AbsR.elements[3 * 2 + 0] +
+             be[2] * AbsR.elements[3 * 1 + 0];
+        if (Math.abs(t[2] * R.elements[3 * 0 + 1] -
+                     t[1] * R.elements[3 * 0 + 2]) > ra + rb) {
+            return false;
+        }
+
+        // Test axis L = A0 x B1
+        ra = ae[1] * AbsR.elements[3 * 1 + 2] +
+             ae[2] * AbsR.elements[3 * 1 + 1];
+        rb = be[0] * AbsR.elements[3 * 2 + 0] +
+             be[2] * AbsR.elements[3 * 0 + 0];
+        if (Math.abs(t[2] * R.elements[3 * 1 + 1] -
+                     t[1] * R.elements[3 * 1 + 2]) > ra + rb) {
+            return false;
+        }
+
+        // Test axis L = A0 x B2
+        ra = ae[1] * AbsR.elements[3 * 2 + 2] +
+             ae[2] * AbsR.elements[3 * 2 + 1];
+        rb = be[0] * AbsR.elements[3 * 1 + 0] +
+             be[1] * AbsR.elements[3 * 0 + 0];
+        if (Math.abs(t[2] * R.elements[3 * 2 + 1] -
+                     t[1] * R.elements[3 * 2 + 2]) > ra + rb) {
+            return false;
+        }
+
+        // Test axis L = A1 x B0
+        ra = ae[0] * AbsR.elements[3 * 0 + 2] +
+             ae[2] * AbsR.elements[3 * 0 + 0];
+        rb = be[1] * AbsR.elements[3 * 2 + 1] +
+             be[2] * AbsR.elements[3 * 1 + 1];
+        if (Math.abs(t[0] * R.elements[3 * 0 + 2] -
+                     t[2] * R.elements[3 * 0 + 0]) > ra + rb) {
+            return false;
+        }
+
+        // Test axis L = A1 x B1
+        ra = ae[0] * AbsR.elements[3 * 1 + 2] +
+             ae[2] * AbsR.elements[3 * 1 + 0];
+        rb = be[0] * AbsR.elements[3 * 2 + 1] +
+             be[2] * AbsR.elements[3 * 0 + 1];
+        if (Math.abs(t[0] * R.elements[3 * 1 + 2] +
+                     t[2] * R.elements[3 * 1 + 0]) > ra + rb) {
+            return false;
+        }
+        // Test axis L = A1 x B2
+        ra = ae[0] * AbsR.elements[3 * 2 + 2] +
+             ae[2] * AbsR.elements[3 * 2 + 0];
+        rb = be[0] * AbsR.elements[3 * 1 + 1] +
+             be[1] * AbsR.elements[3 * 0 + 1];
+        if (Math.abs(t[0] * R.elements[3 * 2 + 2] +
+                     t[2] * R.elements[3 * 2 + 0]) > ra + rb) {
+            return false;
+        }
+        // Test axis L = A2 x B0
+        ra = ae[0] * AbsR.elements[3 * 0 + 1] +
+             ae[1] * AbsR.elements[3 * 0 + 0];
+        rb = be[1] * AbsR.elements[3 * 2 + 2] +
+             be[2] * AbsR.elements[3 * 1 + 2];
+        if (Math.abs(t[1] * R.elements[3 * 0 + 0] +
+                     t[0] * R.elements[3 * 0 + 1]) > ra + rb) {
+            return false;
+        }
+        // Test axis L = A2 x B1
+        ra = ae[0] * AbsR.elements[3 * 1 + 1] +
+             ae[1] * AbsR.elements[3 * 1 + 0];
+        rb = be[0] * AbsR.elements[3 * 2 + 2] +
+             be[2] * AbsR.elements[3 * 0 + 2];
+        if (Math.abs(t[1] * R.elements[3 * 1 + 0] +
+                     t[0] * R.elements[3 * 1 + 1]) > ra + rb) {
+            return false;
+        }
+        // Test axis L = A2 x B2
+        ra = ae[0] * AbsR.elements[3 * 2 + 1] +
+             ae[1] * AbsR.elements[3 * 2 + 0];
+        rb = be[0] * AbsR.elements[3 * 1 + 2] +
+             be[1] * AbsR.elements[3 * 0 + 2];
+        if (Math.abs(t[1] * R.elements[3 * 2 + 0] +
+                     t[0] * R.elements[3 * 2 + 1]) > ra + rb) {
+            return false;
+        }
+        // Since no separating axis is found, the OBBs must be intersecting
+        return true;
+    }
+
+    function testOBBTri(obb, tri) {
+        var i,
+            v = [new THREE.Vector3(),
+                 new THREE.Vector3(),
+                 new THREE.Vector3()],
+            e = [new THREE.Vector3(),
+                 new THREE.Vector3(),
+                 new THREE.Vector3()],
+            fex,
+            fey,
+            fez,
+            // Variables for axis tests
+            p0, p1, p2, min, max, rad,
+            normal = new THREE.Vector3();
+
+        function planeBoxOverlap(normal, vert, maxbox) {
+            var q,
+                vmin = new THREE.Vector3(),
+                vmax = new THREE.Vector3(),
+                v;
+
+            for (q = 0; q < 3; q += 1) {
+                v = vert.getComponent(q);
+                if (normal.getComponent(q) > 0) {
+                    vmin.setComponent(q, -maxbox.getComponent(q) - v);
+                    vmax.setComponent(q,  maxbox.getComponent(q) - v);
+                } else {
+                    vmin.setComponent(q,  maxbox.getComponent(q) - v);
+                    vmax.setComponent(q, -maxbox.getComponent(q) - v);
+                }
+            }
+
+            if (normal.dot(vmin) > 0) {
+                return false;
+            }
+            if (normal.dot(vmax) >= 0) {
+                return true;
+            }
+
+            return false;
+        }
+
+        // Axis tests
+        function axisTestX01(a, b, fa, fb) {
+            p0 = a * v[0].y - b * v[0].z;
+            p2 = a * v[2].y - b * v[2].z;
+            if (p0 < p2) {
+                min = p0;
+                max = p2;
+            } else {
+                min = p2;
+                max = p0;
+            }
+            rad = fa * obb.e.y + fb * obb.e.z;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function axisTestX2(a, b, fa, fb) {
+            p0 = a * v[0].y - b * v[0].z;
+            p1 = a * v[1].y - b * v[1].z;
+            if (p0 < p1) {
+                min = p0;
+                max = p1;
+            } else {
+                min = p1;
+                max = p0;
+            }
+            rad = fa * obb.e.y + fb * obb.e.z;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function axisTestY02(a, b, fa, fb) {
+            p0 = -a * v[0].x + b * v[0].z;
+            p2 = -a * v[2].x + b * v[2].z;
+            if (p0 < p2) {
+                min = p0;
+                max = p2;
+            } else {
+                min = p2;
+                max = p0;
+            }
+            rad = fa * obb.e.x + fb * obb.e.z;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function axisTestY1(a, b, fa, fb) {
+            p0 = -a * v[0].x + b * v[0].z;
+            p1 = -a * v[1].x + b * v[1].z;
+            if (p0 < p1) {
+                min = p0;
+                max = p1;
+            } else {
+                min = p1;
+                max = p0;
+            }
+            rad = fa * obb.e.x + fb * obb.e.z;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function axisTestZ12(a, b, fa, fb) {
+            p1 = a * v[1].x - b * v[1].y;
+            p2 = a * v[2].x - b * v[2].y;
+            if (p2 < p1) {
+                min = p2;
+                max = p1;
+            } else {
+                min = p1;
+                max = p2;
+            }
+            rad = fa * obb.e.x + fb * obb.e.y;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function axisTestZ0(a, b, fa, fb) {
+            p0 = a * v[0].x - b * v[0].y;
+            p1 = a * v[1].x - b * v[1].y;
+            if (p0 < p1) {
+                min = p0;
+                max = p1;
+            } else {
+                min = p1;
+                max = p0;
+            }
+            rad = fa * obb.e.x + fb * obb.e.y;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function findMinMax(x0, x1, x2) {
+            min = max = x0;
+            if (x1 < min) {
+                min = x1;
+            } else if (x1 > max) {
+                max = x1;
+            }
+            if (x2 < min) {
+                min = x2;
+            } else if (x2 > max) {
+                max = x2;
+            }
+        }
+
+        // Calculate the rotated triangle, which reduces this to an
+        //  AABB-triangle test
+        for (i = 0; i < 3; i += 1) {
+            v[i].subVectors(tri[i], obb.c);
+            v[i].set(v[i].dot(obb.u[0]),
+                     v[i].dot(obb.u[1]),
+                     v[i].dot(obb.u[2]));
+        }
+
+        // Compute edges
+        for (i = 0; i < 3; i += 1) {
+            e[i].subVectors(v[(i + 1) % 3], v[i]);
+        }
+
+        fex = Math.abs(e[0].x);
+        fey = Math.abs(e[0].y);
+        fez = Math.abs(e[0].z);
+        if (!axisTestX01(e[0].z, e[0].y, fez, fey) ||
+            !axisTestY02(e[0].z, e[0].x, fez, fex) ||
+            !axisTestZ12(e[0].y, e[0].x, fey, fex)) {
+            return false;
+        }
+
+        fex = Math.abs(e[1].x);
+        fey = Math.abs(e[1].y);
+        fez = Math.abs(e[1].z);
+        if (!axisTestX01(e[1].z, e[1].y, fez, fey) ||
+            !axisTestY02(e[1].z, e[1].x, fez, fex) ||
+            !axisTestZ0(e[1].y, e[1].x, fey, fex)) {
+            return false;
+        }
+
+        fex = Math.abs(e[2].x);
+        fey = Math.abs(e[2].y);
+        fez = Math.abs(e[2].z);
+        if (!axisTestX2(e[2].z, e[2].y, fez, fey) ||
+            !axisTestY1(e[2].z, e[2].x, fez, fex) ||
+            !axisTestZ12(e[2].y, e[2].x, fey, fex)) {
+            return false;
+        }
+
+        // Test for the AABB of the triangle
+        findMinMax(v[0].x, v[1].x, v[2].x);
+        if (min > obb.e.x ||
+            max < -obb.e.x) {
+            return false;
+        }
+
+        findMinMax(v[0].y, v[1].y, v[2].y);
+        if (min > obb.e.y ||
+            max < -obb.e.y) {
+            return false;
+        }
+
+        findMinMax(v[0].z, v[1].z, v[2].z);
+        if (min > obb.e.z ||
+            max < -obb.e.z) {
+            return false;
+        }
+
+        // Test if the box penetrates the triangle's plane
+        normal.crossVectors(e[0], e[1]);
+        if (!planeBoxOverlap(normal, v[0], obb.e)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    // Takes a dynamic physics object and checks if it's colliding
+    //  with another dynamic physics object
+    function detectDynamicCollision(obj1, obj2) {
+        // Prevent self testing
+        if (obj1 !== obj2) {
+            // Oriented bounding box check
+            if (testOBBOBB(obj1.physics.orientedBoundingBox,
+                        obj2.physics.orientedBoundingBox)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function detectCollisions() {
+        var i, j;
+
+        // Clear previous collisions
+        for (i = 0; i < dynamicObjects.length; i += 1) {
+            dynamicObjects[i].geometry.collisions = [];
+        }
+
+        // For each dynamic object
+        for (i = 0; i < dynamicObjects.length; i += 1) {
+            // Test against static objects
+            if (detectStaticCollision(dynamicObjects[i])) {
+                dynamicObjects[i].geometry.collisions.push({
+                    isEnvironment: true
+                });
+                console.log(dynamicObjects[i].geometry.name +
+                    ' environment collision');
+            }
+
+            // Test against dynamic objects
+            for (j = i + 1; j < dynamicObjects.length; j += 1) {
+                if (detectDynamicCollision(dynamicObjects[i],
+                                           dynamicObjects[j])) {
+                    dynamicObjects[i].geometry.collisions.push({
+                        isEnvironment: false,
+                        otherObject: dynamicObjects[j].geometry
+                    });
+                    dynamicObjects[j].geometry.collisions.push({
+                        isEnvironment: false,
+                        otherObject: dynamicObjects[i].geometry
+                    });
+                    console.log(dynamicObjects[i].geometry.name +
+                        ' collided with ' +
+                        dynamicObjects[j].geometry.name);
+                }
+            }
+        }
+    }
+
+    return {addObject: addObject,
+            detectCollisions: detectCollisions,
+            updateObjects: updateObjects};
+}());
+
 BOTSIM.on('scene-loaded', 'readyScene', BOTSIM);
 
 BOTSIM.on('scene-ready', 'startLoop', BOTSIM);
@@ -1166,6 +1810,11 @@ BOTSIM.on('scene-ready', 'startLoop', BOTSIM);
 BOTSIM.on('tick', function (dt) {
     this.controls.update(60 * dt);
 }, BOTSIM);
+
+BOTSIM.on('tick', function (dt) {
+    BOTSIM.physics.updateObjects(dt);
+    BOTSIM.physics.detectCollisions();
+});
 
 BOTSIM.on('render', (function () {
     var canvas = document.createElement('canvas'),
