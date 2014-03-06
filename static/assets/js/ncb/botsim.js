@@ -4,12 +4,11 @@
 'use strict';
 
 /////////////////////////////// Constants ////////////////////////////
-var BOTSIM = BOTSIM || {
+var BOTSIM = {
     ASPECT: 16 / 9,
     FPS: 60,
     CHARACTER: 'mouse'
 };
-
 
 //////////////// Convenience functions and objects ////////////////////
 // Yay, incompatibility! Probably should put this in its own file
@@ -174,73 +173,8 @@ function Robot(obj, robotType) {
 
         // Move
         this.simultaneousTurnMove(ds, dtheta);
-
-        // Check for collisions
-        if (this.detectCollisions()) {
-            // Resolve the collision
-            this.simultaneousTurnMove(-ds, -dtheta);
-        }
     };
     BOTSIM.on('tick', that.move, that);
-
-    /** Sets up the collision box, if not set
-     */
-    that.setupCollisionBox = function () {
-        if (!that.collisionVertices) {
-            that.collisionVertices = (function () {
-                    var b = (new THREE.Box3()).setFromObject(that),
-                        Vec = THREE.Vector3,
-                        invMatrixWorld = (new THREE.Matrix4()).
-                            getInverse(that.matrixWorld);
-
-                    // The bounding box should be in local space
-                    b.applyMatrix4(invMatrixWorld);
-
-                    // We're really going to be doing to do collisions with the
-                    //  bounding box of the robot
-                    return [new Vec( b.min.x, b.min.y, b.min.z ),
-                            new Vec( b.min.x, b.min.y, b.max.z ),
-                            new Vec( b.min.x, b.max.y, b.min.z ),
-                            new Vec( b.min.x, b.max.y, b.max.z ),
-                            new Vec( b.max.x, b.min.y, b.min.z ),
-                            new Vec( b.max.x, b.min.y, b.max.z ),
-                            new Vec( b.max.x, b.max.y, b.min.z ),
-                            new Vec( b.max.x, b.max.y, b.max.z )];
-                }());
-        }
-    };
-
-    that.detectCollisions = function () {
-        // Initialize the collision box
-        that.setupCollisionBox();
-
-        that.detectCollisions = function () {
-            var idx,
-                originPoint = this.position.clone(),
-                localVertex,
-                globalVertex,
-                directionVector,
-                ray,
-                collisionResults;
-
-            for (idx = 0; idx < that.collisionVertices.length; idx += 1) {
-                localVertex = that.collisionVertices[idx].clone();
-                globalVertex = localVertex.applyMatrix4(this.matrix);
-                directionVector = globalVertex.sub(this.position);
-                ray = new THREE.Raycaster(originPoint, directionVector.clone().normalize());
-                collisionResults = ray.intersectObjects(BOTSIM.collidableMeshList);
-
-                if (collisionResults.length > 0 &&
-                    collisionResults[0].distance < directionVector.length()) {
-                    return true;
-                }
-            }
-
-            return false;
-        };
-
-        that.detectCollisions();
-    };
     
     document.addEventListener( 'keydown', function (event) {
         if (event.altKey) {
@@ -301,7 +235,11 @@ Robot.modelLoaders = {
 
                 robotObj.scale.set(0.2, 0.2, 0.2);
                 obj.add(robotObj);
-                BOTSIM.physics.addObject(obj, {isStatic: false});
+                BOTSIM.physics.addObject(obj,
+                    {
+                        isStatic: false,
+                        state: 'controlled'
+                    });
 
                 // Place a camera in the robot
                 // Find the bounding box
@@ -354,7 +292,11 @@ Robot.modelLoaders = {
                 steve.scale.set(scale, scale, scale);
 
                 obj.add(steve);
-                BOTSIM.physics.addObject(obj, {isStatic: false});
+                BOTSIM.physics.addObject(obj,
+                    {
+                        isStatic: false,
+                        state: 'controlled'
+                    });
 
                 for (i = 0; i < materials.length; i += 1) {
                     // For bones
@@ -436,12 +378,8 @@ Robot.modelLoaders = {
                             target.rotation,
                             target.scale);
 
-                    // Move the collision detection for the object from the
-                    //  world to the robot
-                    BOTSIM.collidableMeshList = _.difference(
-                        BOTSIM.collidableMeshList,
-                        [target],
-                        target.getDescendants());
+                    // Note that we should do collision detection for this
+                    BOTSIM.physics.changeObjectState(target, 'held');
                 };
 
                 // This removes the target from the arm
@@ -466,12 +404,6 @@ Robot.modelLoaders = {
                                 target.rotation,
                                 target.scale);
 
-                        // Reinstate collision detection
-                        BOTSIM.collidableMeshList.push(target);
-                        BOTSIM.collidableMeshList =
-                            BOTSIM.collidableMeshList.concat(
-                                target.getDescendants());
-
                         // We need to note that we're holding nothing
                         if (isLeft) {
                             leftHandObject = undefined;
@@ -479,6 +411,9 @@ Robot.modelLoaders = {
                             rightHandObject = undefined;
                         }
                     }
+
+                    // Switch to a falling state
+                    BOTSIM.physics.changeObjectState(target, 'falling');
                 };
 
                 obj.setArmAngle = function (arm, horiz, vert, roll) {
@@ -941,13 +876,11 @@ BOTSIM.readyScene = function () {
         }
     }
 
-    app.collidableMeshList = [];
     function addCollidable(obj) {
         var isThisPortable = false,
             ancestor = obj;
         if (obj.hasOwnProperty('geometry') &&
             obj.name !== 'Robot') {
-            app.collidableMeshList.push(obj);
 
             // Only add collidable mesh if none of the parents are portable
             while (ancestor) {
@@ -1167,9 +1100,12 @@ BOTSIM.startLoop = function () {
 BOTSIM.physics = (function () {
     var staticObjects = [],
         dynamicObjects = [],
+        // This is used to quickly address objects
+        dynamicObjectIndices = {},
+        staticObjectIndices = {},
         EPSILON = 0.000001;
 
-    function initDynamicCollision(obj) {
+    function initDynamicObject(obj) {
         var bWorld = (new THREE.Box3()).setFromObject(obj.geometry),
             Vec = THREE.Vector3,
             invMatrixWorld = (new THREE.Matrix4()).
@@ -1266,15 +1202,20 @@ BOTSIM.physics = (function () {
                 };
             };
         }());
+
+        dynamicObjects.push(obj);
+        dynamicObjectIndices[obj.geometry.id] = dynamicObjects.length - 1;
     }
 
-    function initStaticCollision(obj) {
+    function initStaticObject(obj) {
         obj.physics.faces = getGlobalFaces(obj);
         obj.physics.boundingSphereWorld =
             new THREE.Sphere().setFromPoints(
                 obj.geometry.geometry.vertices);
         obj.physics.boundingSphereWorld.applyMatrix4(
             obj.geometry.matrixWorld);
+        staticObjects.push(obj);
+        staticObjectIndices[obj.geometry.id] = staticObjects.length - 1;
     }
 
     function getGlobalFaces(obj) {
@@ -1306,6 +1247,9 @@ BOTSIM.physics = (function () {
 
                 return {
                     position: obj.positionWorld(),
+                    lastGoodPosition: obj.positionWorld(),
+                    quaternion: obj.quaternion,
+                    lastGoodQuaternion: obj.quaternion,
                     velocity: p.velocity || new THREE.Vector3(0, 0, 0),
                     state: p.state || 'rest',
                     // The object should be static if this flag is not passed,
@@ -1316,52 +1260,49 @@ BOTSIM.physics = (function () {
         };
 
         if (physicsObj.physics.isStatic) {
-            initStaticCollision(physicsObj);
-            staticObjects.push(physicsObj);
+            initStaticObject(physicsObj);
         } else {
-            initDynamicCollision(physicsObj);
-            dynamicObjects.push(physicsObj);
+            initDynamicObject(physicsObj);
+        }
+    }
+
+    function updateObject(dt, obj, ignoreCollisions) {
+        var lastPosition,
+            position,
+            velocity,
+            quaternion,
+            lastQuaternion;
+
+        // Update position and velocity
+        lastPosition = obj.physics.position;
+        position = obj.geometry.positionWorld();
+        velocity = position.
+            clone().
+            sub(lastPosition).
+            divideScalar(dt);
+        lastQuaternion = obj.physics.quaternion;
+        quaternion = obj.geometry.quaternion;
+
+        obj.physics.position = position;
+        obj.physics.quaternion = quaternion;
+        obj.physics.velocity = velocity;
+
+        // Only note good positions if there are no collisions
+        if (obj.geometry.collisions &&
+            obj.geometry.collisions.length === 0 &&
+            !ignoreCollisions) {
+            obj.physics.lastGoodQuaternion = lastQuaternion;
+            obj.physics.lastGoodPosition = lastPosition;
         }
     }
 
     function updateObjects(dt) {
-        var i,
-            lastPosition,
-            position,
-            velocity;
+        var i;
 
         // Update position and velocity
         for (i = 0; i < dynamicObjects.length; i += 1) {
-            lastPosition = dynamicObjects[i].physics.position;
-            position = dynamicObjects[i].geometry.positionWorld();
-            velocity = position.
-                clone().
-                sub(lastPosition).
-                divideScalar(dt);
-
-            dynamicObjects[i].physics.position = position;
-            dynamicObjects[i].physics.velocity = velocity;
+            updateObject(dt, dynamicObjects[i]);
         }
-    }
-
-    // Takes a dynamic physics object and finds if it's colliding with
-    //  any static objects
-    function detectStaticCollision(obj) {
-        var obb = obj.physics.orientedBoundingBox,
-            sphere = obj.physics.boundingSphereWorld;
-        // Check if any face of any object intersects with
-        //  this object's bounding box
-        return staticObjects.some(function (obj2) {
-            return obj2.physics.faces.some(function (face) {
-                // Broad phase test with spheres
-                if (sphere.intersectsSphere(
-                        obj2.physics.boundingSphereWorld)) {
-                    return testOBBTri(obb, face);
-                }
-
-                return false;
-            });
-        });
     }
 
     function testOBBOBB(a, b) {
@@ -1529,13 +1470,12 @@ BOTSIM.physics = (function () {
             fez,
             // Variables for axis tests
             p0, p1, p2, min, max, rad,
+            vmax = new THREE.Vector3(),
+            vmin = new THREE.Vector3(),
             normal = new THREE.Vector3();
 
         function planeBoxOverlap(normal, vert, maxbox) {
-            var q,
-                vmin = new THREE.Vector3(),
-                vmax = new THREE.Vector3(),
-                v;
+            var q, v;
 
             for (q = 0; q < 3; q += 1) {
                 v = vert.getComponent(q);
@@ -1741,7 +1681,10 @@ BOTSIM.physics = (function () {
             return false;
         }
 
-        return true;
+        return {
+            contactNormal: normal.normalize(),
+            penetration: normal.dot(vmin)
+        };
     }
 
     // Takes a dynamic physics object and checks if it's colliding
@@ -1759,8 +1702,54 @@ BOTSIM.physics = (function () {
         return false;
     }
 
+    // Detects a collision between a dynamic object and
+    // a static object
+    function detectSingleStaticCollision (obj, obj2) {
+        var obb = obj.physics.orientedBoundingBox,
+            sphere = obj.physics.boundingSphereWorld,
+            result;
+        obj2.physics.faces.some(function (face) {
+            // Broad phase test with spheres
+            if (sphere.intersectsSphere(
+                    obj2.physics.boundingSphereWorld)) {
+                result = testOBBTri(obb, face);
+                result.otherObject = obj2;
+                return result;
+            }
+
+            return false;
+        });
+
+        return result;
+    }
+
+    // Takes a dynamic physics object and finds if it's colliding with
+    //  any static objects
+    function detectStaticCollision(obj) {
+        var obb = obj.physics.orientedBoundingBox,
+            sphere = obj.physics.boundingSphereWorld,
+            result = false;
+        // Check if any face of any object intersects with
+        //  this object's bounding box
+        staticObjects.some(function (obj2) {
+            return obj2.physics.faces.some(function (face) {
+                // Broad phase test with spheres
+                if (sphere.intersectsSphere(
+                        obj2.physics.boundingSphereWorld)) {
+                    result = testOBBTri(obb, face);
+                    result.otherObject = obj2.geometry;
+                    return result;
+                }
+
+                return false;
+            });
+        });
+
+        return result;
+    }
+
     function detectCollisions() {
-        var i, j;
+        var i, j, collision;
 
         // Clear previous collisions
         for (i = 0; i < dynamicObjects.length; i += 1) {
@@ -1769,13 +1758,14 @@ BOTSIM.physics = (function () {
 
         // For each dynamic object
         for (i = 0; i < dynamicObjects.length; i += 1) {
-            // Test against static objects
-            if (detectStaticCollision(dynamicObjects[i])) {
-                dynamicObjects[i].geometry.collisions.push({
-                    isEnvironment: true
-                });
-                console.log(dynamicObjects[i].geometry.name +
-                    ' environment collision');
+            // Don't test objects at rest
+            if (dynamicObjects[i].physics.state !== 'rest') {
+                // Test against static objects
+                collision = detectStaticCollision(dynamicObjects[i]);
+                if (collision) {
+                    collision.isEnvironment = true;
+                    dynamicObjects[i].geometry.collisions.push(collision);
+                }
             }
 
             // Test against dynamic objects
@@ -1790,17 +1780,146 @@ BOTSIM.physics = (function () {
                         isEnvironment: false,
                         otherObject: dynamicObjects[i].geometry
                     });
-                    console.log(dynamicObjects[i].geometry.name +
-                        ' collided with ' +
-                        dynamicObjects[j].geometry.name);
                 }
             }
         }
     }
 
-    return {addObject: addObject,
+    function changeObjectState(obj, newState) {
+        getPhysicsObject(obj, false).physics.state = newState;
+    }
+
+    function getPhysicsObject(obj, isStatic) {
+        if (!isStatic &&
+            dynamicObjectIndices.hasOwnProperty(obj.id)) {
+            return dynamicObjects[dynamicObjectIndices[obj.id]];
+        }
+        if (isStatic &&
+            staticObjectIndices.hasOwnProperty(obj.id)) {
+            return staticObjects[staticObjectIndices[obj.id]];
+        }
+    }
+
+    function resolveCollision(dt, obj) {
+        var worldToLocal = new THREE.Matrix4(),
+            position,
+            quaternion,
+            lastPosition,
+            lastQuaternion,
+            isStatic,
+            otherObject,
+            ancestor;
+
+        function stepObject(obj, t) {
+            obj.geometry.position =
+                lastPosition.clone().lerp(position, t);
+            obj.geometry.quaternion =
+                lastQuaternion.clone().slerp(quaternion, t);
+            obj.geometry.updateMatrixWorld();
+            updateObject(dt, obj, true);
+        }
+
+        function bisectCollision(movingObj, collidingObj1, collidingObj2,
+                isStatic) {
+            // t is the fraction of the step we're at
+            var t = 1,
+                tStep = 0.5,
+                isColliding = true;
+            while (dt * tStep > 0.000001) {
+                // Step the object forward or backward in time
+                if (isColliding) {
+                    t -= tStep;
+                } else {
+                    t += tStep;
+                }
+                stepObject(movingObj, t);
+                // Check if it's still colliding
+                if (isStatic) {
+                    isColliding = detectSingleStaticCollision(collidingObj1,
+                        collidingObj2);
+                } else {
+                    isColliding = detectDynamicCollision(collidingObj1,
+                        collidingObj2);
+                }
+                // Cut tStep in two
+                tStep /= 2;
+            }
+            // If it's still colliding, step it back to a guaranteed
+            //  good spot
+            if (isColliding) {
+                t -= tStep * 2;
+                stepObject(movingObj, t);
+            }
+        }
+
+        // If there is a collision
+        if (obj.geometry.collisions.length > 0) {
+            // Initialize convienience variables, but only if we have
+            //  a collision
+            worldToLocal.getInverse(obj.geometry.parent.matrixWorld);
+            position = obj.physics.position.clone().
+                    applyMatrix4(worldToLocal);
+            quaternion = obj.physics.quaternion.clone();
+            lastPosition =
+                obj.physics.lastGoodPosition.clone().
+                    applyMatrix4(worldToLocal);
+            lastQuaternion =
+                obj.physics.lastGoodQuaternion.clone();
+            obj.geometry.collisions.forEach(function (collision) {
+                isStatic = collision.isEnvironment;
+                otherObject = getPhysicsObject(
+                    collision.otherObject,
+                    isStatic);
+                switch (obj.physics.state) {
+                    // If it's controlled, then revert to a previous
+                    // state with no collision
+                    case 'controlled':
+                        // Ignore collisions with held objects
+                        if (otherObject.state !== 'held') {
+                            bisectCollision(obj, obj, otherObject, isStatic);
+                        }
+                        break;
+                    case 'held':
+                        /* We're just not going to bother with this for now.
+                           I'm not sure it's worth it.
+                        // If the object has moved, then revert the object
+                        if (!lastPosition.equals(position) ||
+                            !lastQuaternion.equals(quaternion)) {
+                            bisectCollision(obj, obj, otherObject, isStatic);
+                        } else {
+                            // Otherwise, the parent moved the object, so
+                            // find the object holding this one and back that
+                            // up
+                            ancestor = obj.geometry;
+                            while (!getPhysicsObject(ancestor) ||
+                                getPhysicsObject(ancestor).physics.state ===
+                                'controlled') {
+                                ancestor = ancestor.parent;
+                            }
+                            ancestor = getPhysicsObject(ancestor);
+                            bisectCollision(ancestor, obj, otherObject, isStatic);
+                        }
+                        */
+                        break;
+                }
+            });
+        }
+    }
+
+    function resolveCollisions(dt) {
+        var i;
+        for (i = 0; i < dynamicObjects.length; i += 1) {
+            resolveCollision(dt, dynamicObjects[i]);
+        }
+    }
+
+    return {
+            addObject: addObject,
             detectCollisions: detectCollisions,
-            updateObjects: updateObjects};
+            updateObjects: updateObjects,
+            changeObjectState: changeObjectState,
+            resolveCollisions: resolveCollisions
+        };
 }());
 
 BOTSIM.on('scene-loaded', 'readyScene', BOTSIM);
@@ -1814,6 +1933,7 @@ BOTSIM.on('tick', function (dt) {
 BOTSIM.on('tick', function (dt) {
     BOTSIM.physics.updateObjects(dt);
     BOTSIM.physics.detectCollisions();
+    BOTSIM.physics.resolveCollisions(dt);
 });
 
 BOTSIM.on('render', (function () {
