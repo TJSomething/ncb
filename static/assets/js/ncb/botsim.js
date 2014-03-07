@@ -174,7 +174,7 @@ function Robot(obj, robotType) {
         // Move
         this.simultaneousTurnMove(ds, dtheta);
     };
-    BOTSIM.on('tick', that.move, that);
+    BOTSIM.on('logic-tick', that.move, that);
     
     document.addEventListener( 'keydown', function (event) {
         if (event.altKey) {
@@ -566,7 +566,7 @@ Robot.modelLoaders = {
                         }
                     }
                 }
-                BOTSIM.on('tick', function (dt) { moveArms(dt); });
+                BOTSIM.on('logic-tick', function (dt) { moveArms(dt); });
 
                 function checkHandCollision(arm, target) {
                     var isRight = arm[0] === 'r' || arm[0] === 'R',
@@ -1088,7 +1088,10 @@ BOTSIM.startLoop = function () {
 
                 if (accumulator > tickLength) {
                     that.logicStats.begin();
-                    that.fire('tick', accumulator - (accumulator % tickLength));
+                    that.fire('logic-tick',
+                        accumulator - (accumulator % tickLength));
+                    that.fire('physics-tick',
+                        accumulator - (accumulator % tickLength));
                     accumulator %= tickLength;
                     that.logicStats.end();
                 }
@@ -1266,34 +1269,16 @@ BOTSIM.physics = (function () {
         }
     }
 
-    function updateObject(dt, obj, ignoreCollisions) {
-        var lastPosition,
-            position,
-            velocity,
-            quaternion,
-            lastQuaternion;
+    function updateObject(dt, obj) {
+        var position,
+            quaternion;
 
         // Update position and velocity
-        lastPosition = obj.physics.position;
         position = obj.geometry.positionWorld();
-        velocity = position.
-            clone().
-            sub(lastPosition).
-            divideScalar(dt);
-        lastQuaternion = obj.physics.quaternion;
         quaternion = obj.geometry.quaternion;
 
         obj.physics.position = position;
         obj.physics.quaternion = quaternion;
-        obj.physics.velocity = velocity;
-
-        // Only note good positions if there are no collisions
-        if (obj.geometry.collisions &&
-            obj.geometry.collisions.length === 0 &&
-            !ignoreCollisions) {
-            obj.physics.lastGoodQuaternion = lastQuaternion;
-            obj.physics.lastGoodPosition = lastPosition;
-        }
     }
 
     function updateObjects(dt) {
@@ -1315,7 +1300,10 @@ BOTSIM.physics = (function () {
             // Putting these into arrays for for-loops
             tArr,
             ae = [a.e.x, a.e.y, a.e.z],
-            be = [b.e.x, b.e.y, b.e.z];
+            be = [b.e.x, b.e.y, b.e.z],
+            axisDist,
+            penetration = Infinity,
+            normal = new THREE.Vector3();
 
         // Compute rotation matrix expressing b in a's coordinate frame
         for (i = 0; i < 3; i += 1) {
@@ -1349,8 +1337,13 @@ BOTSIM.physics = (function () {
             rb = b.e.x * AbsR.elements[i] +
                  b.e.y * AbsR.elements[3 + i] +
                  b.e.z * AbsR.elements[6 + i];
-            if (Math.abs(tArr[i]) > ra + rb) {
+            axisDist = Math.abs(tArr[i]) - (ra + rb);
+            if (axisDist > 0) {
                 return false;
+            } else if (-axisDist < penetration) {
+                penetration = -axisDist;
+                normal.set(0, 0, 0);
+                normal.setComponent(i, -Math.sign(tArr[i]));
             }
         }
 
@@ -1360,10 +1353,18 @@ BOTSIM.physics = (function () {
                  a.e.y * AbsR.elements[3 * i + 1] +
                  a.e.z * AbsR.elements[3 * i + 2];
             rb = be[i];
-            if (Math.abs(t.x * R.elements[3 * i] +
-                         t.y * R.elements[3 * i + 1] +
-                         t.z * R.elements[3 * i + 2]) > ra + rb) {
+            axisDist = Math.abs(t.x * R.elements[3 * i] +
+                                t.y * R.elements[3 * i + 1] +
+                                t.z * R.elements[3 * i + 2]) -
+                       (ra + rb);
+            if (axisDist > 0) {
                 return false;
+            } else if (-axisDist < penetration) {
+                penetration = -axisDist;
+                normal.set(R.elements[3 * i],
+                           R.elements[3 * i + 1],
+                           R.elements[3 * i + 2]);
+                normal.multiplyScalar(-Math.sign(normal.dot(t)));
             }
         }
         
@@ -1373,9 +1374,17 @@ BOTSIM.physics = (function () {
              ae[2] * AbsR.elements[3 * 0 + 1];
         rb = be[1] * AbsR.elements[3 * 2 + 0] +
              be[2] * AbsR.elements[3 * 1 + 0];
-        if (Math.abs(t[2] * R.elements[3 * 0 + 1] -
-                     t[1] * R.elements[3 * 0 + 2]) > ra + rb) {
+        axisDist = Math.abs(t[2] * R.elements[3 * 0 + 1] -
+                            t[1] * R.elements[3 * 0 + 2]) -
+                   (ra + rb);
+        if (axisDist > 0) {
             return false;
+        } else if (-axisDist < penetration) {
+            penetration = -axisDist;
+            normal.set(0,
+                       -R.elements[3 * 0 + 2],
+                       R.elements[3 * 0 + 1]);
+            normal.multiplyScalar(-Math.sign(normal.dot(t)));
         }
 
         // Test axis L = A0 x B1
@@ -1383,9 +1392,16 @@ BOTSIM.physics = (function () {
              ae[2] * AbsR.elements[3 * 1 + 1];
         rb = be[0] * AbsR.elements[3 * 2 + 0] +
              be[2] * AbsR.elements[3 * 0 + 0];
-        if (Math.abs(t[2] * R.elements[3 * 1 + 1] -
-                     t[1] * R.elements[3 * 1 + 2]) > ra + rb) {
+        axisDist = Math.abs(t[2] * R.elements[3 * 1 + 1] -
+                            t[1] * R.elements[3 * 1 + 2]) - (ra + rb);
+        if (axisDist > 0) {
             return false;
+        } else if (-axisDist < penetration) {
+            penetration = -axisDist;
+            normal.set(0,
+                       -R.elements[3 * 1 + 2],
+                       R.elements[3 * 1 + 1]);
+            normal.multiplyScalar(-Math.sign(normal.dot(t)));
         }
 
         // Test axis L = A0 x B2
@@ -1393,9 +1409,16 @@ BOTSIM.physics = (function () {
              ae[2] * AbsR.elements[3 * 2 + 1];
         rb = be[0] * AbsR.elements[3 * 1 + 0] +
              be[1] * AbsR.elements[3 * 0 + 0];
-        if (Math.abs(t[2] * R.elements[3 * 2 + 1] -
-                     t[1] * R.elements[3 * 2 + 2]) > ra + rb) {
+        axisDist = Math.abs(t[2] * R.elements[3 * 2 + 1] -
+                            t[1] * R.elements[3 * 2 + 2]) - (ra + rb);
+        if (axisDist > 0) {
             return false;
+        } else if (-axisDist < penetration) {
+            penetration = -axisDist;
+            normal.set(0,
+                       -R.elements[3 * 2 + 2],
+                       R.elements[3 * 2 + 1]);
+            normal.multiplyScalar(-Math.sign(normal.dot(t)));
         }
 
         // Test axis L = A1 x B0
@@ -1403,9 +1426,16 @@ BOTSIM.physics = (function () {
              ae[2] * AbsR.elements[3 * 0 + 0];
         rb = be[1] * AbsR.elements[3 * 2 + 1] +
              be[2] * AbsR.elements[3 * 1 + 1];
-        if (Math.abs(t[0] * R.elements[3 * 0 + 2] -
-                     t[2] * R.elements[3 * 0 + 0]) > ra + rb) {
+        axisDist = Math.abs(t[0] * R.elements[3 * 0 + 2] -
+                            t[2] * R.elements[3 * 0 + 0]) - (ra + rb);
+        if (axisDist > 0) {
             return false;
+        } else if (-axisDist < penetration) {
+            penetration = -axisDist;
+            normal.set(-R.elements[3 * 0 + 2],
+                       0,
+                       R.elements[3 * 0 + 0]);
+            normal.multiplyScalar(-Math.sign(normal.dot(t)));
         }
 
         // Test axis L = A1 x B1
@@ -1413,48 +1443,91 @@ BOTSIM.physics = (function () {
              ae[2] * AbsR.elements[3 * 1 + 0];
         rb = be[0] * AbsR.elements[3 * 2 + 1] +
              be[2] * AbsR.elements[3 * 0 + 1];
-        if (Math.abs(t[0] * R.elements[3 * 1 + 2] +
-                     t[2] * R.elements[3 * 1 + 0]) > ra + rb) {
+        axisDist = Math.abs(t[0] * R.elements[3 * 1 + 2] +
+                            t[2] * R.elements[3 * 1 + 0]) - (ra + rb);
+        if (axisDist > 0) {
             return false;
+        } else if (-axisDist < penetration) {
+            penetration = -axisDist;
+            normal.set(R.elements[3 * 1 + 2],
+                       0,
+                       R.elements[3 * 1 + 0]);
+            normal.multiplyScalar(-Math.sign(normal.dot(t)));
         }
+
         // Test axis L = A1 x B2
         ra = ae[0] * AbsR.elements[3 * 2 + 2] +
              ae[2] * AbsR.elements[3 * 2 + 0];
         rb = be[0] * AbsR.elements[3 * 1 + 1] +
              be[1] * AbsR.elements[3 * 0 + 1];
-        if (Math.abs(t[0] * R.elements[3 * 2 + 2] +
-                     t[2] * R.elements[3 * 2 + 0]) > ra + rb) {
+        axisDist = Math.abs(t[0] * R.elements[3 * 2 + 2] +
+                            t[2] * R.elements[3 * 2 + 0]) - (ra + rb);
+        if (axisDist > 0) {
             return false;
+        } else if (-axisDist < penetration) {
+            penetration = -axisDist;
+            normal.set(R.elements[3 * 2 + 2],
+                       0,
+                       R.elements[3 * 2 + 0]);
+            normal.multiplyScalar(-Math.sign(normal.dot(t)));
         }
+
         // Test axis L = A2 x B0
         ra = ae[0] * AbsR.elements[3 * 0 + 1] +
              ae[1] * AbsR.elements[3 * 0 + 0];
         rb = be[1] * AbsR.elements[3 * 2 + 2] +
              be[2] * AbsR.elements[3 * 1 + 2];
-        if (Math.abs(t[1] * R.elements[3 * 0 + 0] +
-                     t[0] * R.elements[3 * 0 + 1]) > ra + rb) {
+        axisDist = Math.abs(t[1] * R.elements[3 * 0 + 0] +
+                            t[0] * R.elements[3 * 0 + 1]) - (ra + rb);
+        if (axisDist > 0) {
             return false;
+        } else if (-axisDist < penetration) {
+            penetration = -axisDist;
+            normal.set(R.elements[3 * 0 + 1],
+                       R.elements[3 * 0 + 0],
+                       0);
+            normal.multiplyScalar(-Math.sign(normal.dot(t)));
         }
+
         // Test axis L = A2 x B1
         ra = ae[0] * AbsR.elements[3 * 1 + 1] +
              ae[1] * AbsR.elements[3 * 1 + 0];
         rb = be[0] * AbsR.elements[3 * 2 + 2] +
              be[2] * AbsR.elements[3 * 0 + 2];
-        if (Math.abs(t[1] * R.elements[3 * 1 + 0] +
-                     t[0] * R.elements[3 * 1 + 1]) > ra + rb) {
+        axisDist = Math.abs(t[1] * R.elements[3 * 1 + 0] +
+                            t[0] * R.elements[3 * 1 + 1]) - (ra + rb);
+        if (axisDist > 0) {
             return false;
+        } else if (-axisDist < penetration) {
+            penetration = -axisDist;
+            normal.set(R.elements[3 * 1 + 1],
+                       R.elements[3 * 1 + 0],
+                       0);
+            normal.multiplyScalar(-Math.sign(normal.dot(t)));
         }
+
         // Test axis L = A2 x B2
         ra = ae[0] * AbsR.elements[3 * 2 + 1] +
              ae[1] * AbsR.elements[3 * 2 + 0];
         rb = be[0] * AbsR.elements[3 * 1 + 2] +
              be[1] * AbsR.elements[3 * 0 + 2];
-        if (Math.abs(t[1] * R.elements[3 * 2 + 0] +
-                     t[0] * R.elements[3 * 2 + 1]) > ra + rb) {
+        axisDist = Math.abs(t[1] * R.elements[3 * 2 + 0] +
+                            t[0] * R.elements[3 * 2 + 1]) - (ra + rb);
+        if (axisDist > 0) {
             return false;
+        } else if (-axisDist < penetration) {
+            penetration = -axisDist;
+            normal.set(R.elements[3 * 2 + 1],
+                       R.elements[3 * 2 + 0],
+                       0);
+            normal.multiplyScalar(-Math.sign(normal.dot(t)));
         }
+
         // Since no separating axis is found, the OBBs must be intersecting
-        return true;
+        return {
+            penetration: penetration,
+            contactNormal: normal
+        };
     }
 
     function testOBBTri(obb, tri) {
@@ -1472,7 +1545,9 @@ BOTSIM.physics = (function () {
             p0, p1, p2, min, max, rad,
             vmax = new THREE.Vector3(),
             vmin = new THREE.Vector3(),
-            normal = new THREE.Vector3();
+            normal = new THREE.Vector3(),
+            penetration = Infinity,
+            contactNormal = new THREE.Vector3();
 
         function planeBoxOverlap(normal, vert, maxbox) {
             var q, v;
@@ -1492,6 +1567,10 @@ BOTSIM.physics = (function () {
                 return false;
             }
             if (normal.dot(vmax) >= 0) {
+                if (-normal.clone().normalize().dot(vmin) < penetration) {
+                    contactNormal = normal.clone().normalize();
+                    penetration = -contactNormal.dot(vmin);
+                }
                 return true;
             }
 
@@ -1682,8 +1761,8 @@ BOTSIM.physics = (function () {
         }
 
         return {
-            contactNormal: normal.normalize(),
-            penetration: normal.dot(vmin)
+            contactNormal: contactNormal,
+            penetration: penetration
         };
     }
 
@@ -1693,10 +1772,8 @@ BOTSIM.physics = (function () {
         // Prevent self testing
         if (obj1 !== obj2) {
             // Oriented bounding box check
-            if (testOBBOBB(obj1.physics.orientedBoundingBox,
-                        obj2.physics.orientedBoundingBox)) {
-                return true;
-            }
+            return testOBBOBB(obj1.physics.orientedBoundingBox,
+                    obj2.physics.orientedBoundingBox);
         }
 
         return false;
@@ -1707,49 +1784,72 @@ BOTSIM.physics = (function () {
     function detectSingleStaticCollision (obj, obj2) {
         var obb = obj.physics.orientedBoundingBox,
             sphere = obj.physics.boundingSphereWorld,
-            result;
-        obj2.physics.faces.some(function (face) {
-            // Broad phase test with spheres
-            if (sphere.intersectsSphere(
-                    obj2.physics.boundingSphereWorld)) {
-                result = testOBBTri(obb, face);
-                result.otherObject = obj2;
-                return result;
-            }
+            collision,
+            bestCollision =
+                obj2.physics.faces.reduce(function (bestCollision, face) {
+                    // Broad phase test with spheres
+                    if (sphere.intersectsSphere(
+                            obj2.physics.boundingSphereWorld)) {
+                        collision = testOBBTri(obb, face);
+                        if (collision &&
+                            collision.penetration < bestCollision.penetration) {
+                            collision.otherObject = obj2;
+                            return collision;
+                        }
+                    }
 
+                    return bestCollision;
+                }, {
+                    penetration: Infinity
+                });
+
+        if (isFinite(bestCollision.penetration)) {
+            return bestCollision;
+        } else {
             return false;
-        });
-
-        return result;
+        }
     }
 
     // Takes a dynamic physics object and finds if it's colliding with
     //  any static objects
     function detectStaticCollision(obj) {
-        var obb = obj.physics.orientedBoundingBox,
-            sphere = obj.physics.boundingSphereWorld,
-            result = false;
-        // Check if any face of any object intersects with
-        //  this object's bounding box
-        staticObjects.some(function (obj2) {
-            return obj2.physics.faces.some(function (face) {
-                // Broad phase test with spheres
-                if (sphere.intersectsSphere(
-                        obj2.physics.boundingSphereWorld)) {
-                    result = testOBBTri(obb, face);
-                    result.otherObject = obj2.geometry;
-                    return result;
-                }
+        var collision,
+            // Check if any face of any object intersects with
+            //  this object's bounding box
+            totalCollisions =
+                staticObjects.reduce(function (collisions, obj2) {
+                    collision = detectSingleStaticCollision(obj, obj2);
+                    if (collision) {
+                        collisions.push(collision);
+                    }
+                    
+                    return collisions;
+                }, []);
 
-                return false;
-            });
-        });
+        if (totalCollisions.length > 0) {
+            return totalCollisions;
+        } else {
+            return false;
+        }
+    }
 
-        return result;
+    function getHoldingObject(obj) {
+        var ancestor;
+
+        if (obj.physics.state === 'held') {
+            ancestor = obj.geometry;
+            while (!getPhysicsObject(ancestor) ||
+                getPhysicsObject(ancestor).physics.state ===
+                'controlled') {
+                ancestor = ancestor.parent;
+            }
+            ancestor = getPhysicsObject(ancestor);
+            return ancestor;
+        }
     }
 
     function detectCollisions() {
-        var i, j, collision;
+        var i, j, collision, collisions;
 
         // Clear previous collisions
         for (i = 0; i < dynamicObjects.length; i += 1) {
@@ -1761,26 +1861,41 @@ BOTSIM.physics = (function () {
             // Don't test objects at rest
             if (dynamicObjects[i].physics.state !== 'rest') {
                 // Test against static objects
-                collision = detectStaticCollision(dynamicObjects[i]);
-                if (collision) {
-                    collision.isEnvironment = true;
-                    dynamicObjects[i].geometry.collisions.push(collision);
+                collisions = detectStaticCollision(dynamicObjects[i]);
+                if (collisions) {
+                    dynamicObjects[i].geometry.collisions =
+                        dynamicObjects[i].geometry.collisions.concat(collisions);
                 }
             }
 
             // Test against dynamic objects
             for (j = i + 1; j < dynamicObjects.length; j += 1) {
-                if (detectDynamicCollision(dynamicObjects[i],
-                                           dynamicObjects[j])) {
-                    dynamicObjects[i].geometry.collisions.push({
-                        isEnvironment: false,
-                        otherObject: dynamicObjects[j].geometry
-                    });
+                collision = detectDynamicCollision(dynamicObjects[i],
+                                           dynamicObjects[j]);
+                if (collision) {
+                    collision.isEnvironment = false;
+                    collision.otherObject = dynamicObjects[j].geometry;
+                    dynamicObjects[i].geometry.collisions.push(collision);
                     dynamicObjects[j].geometry.collisions.push({
+                        // The normal for the other object should be backwards
+                        contactNormal: collision.contactNormal.clone().
+                                multiplyScalar(-1),
+                        penetration: collision.penetration,
                         isEnvironment: false,
                         otherObject: dynamicObjects[i].geometry
                     });
                 }
+            }
+        }
+
+        // If the current position has no collisions, note the current
+        //  position
+        for (i = 0; i < dynamicObjects.length; i += 1) {
+            if (dynamicObjects[i].geometry.collisions.length === 0) {
+                dynamicObjects[i].physics.lastGoodPosition =
+                    dynamicObjects[i].geometry.position.clone();
+                dynamicObjects[i].physics.lastGoodQuaternion =
+                    dynamicObjects[i].geometry.quaternion.clone();
             }
         }
     }
@@ -1807,8 +1922,7 @@ BOTSIM.physics = (function () {
             lastPosition,
             lastQuaternion,
             isStatic,
-            otherObject,
-            ancestor;
+            otherObject;
 
         function stepObject(obj, t) {
             obj.geometry.position =
@@ -1816,7 +1930,28 @@ BOTSIM.physics = (function () {
             obj.geometry.quaternion =
                 lastQuaternion.clone().slerp(quaternion, t);
             obj.geometry.updateMatrixWorld();
-            updateObject(dt, obj, true);
+            obj.geometry.updateMatrix();
+            updateObject(dt, obj);
+        }
+
+        function detectCollision(obj1, obj2, isStatic) {
+            if (isStatic) {
+                return detectSingleStaticCollision(obj1, obj2);
+            } else {
+                return detectDynamicCollision(obj1, obj2);
+            }
+        }
+
+        function jostleOut(obj1, obj2, isStatic) {
+            var collision = detectCollision(obj1, obj2, isStatic);
+            while (collision) {
+                obj1.geometry.position.x += (Math.random() - 0.5)/10;
+                obj1.geometry.position.z += (Math.random() - 0.5)/10;
+                obj1.geometry.rotation.y += (Math.random() - 0.5)/10;
+                obj1.geometry.updateMatrixWorld();
+                updateObject(dt, obj1);
+                collision = detectCollision(obj1, obj2, isStatic);
+            }
         }
 
         function bisectCollision(movingObj, collidingObj1, collidingObj2,
@@ -1825,6 +1960,7 @@ BOTSIM.physics = (function () {
             var t = 1,
                 tStep = 0.5,
                 isColliding = true;
+
             while (dt * tStep > 0.000001) {
                 // Step the object forward or backward in time
                 if (isColliding) {
@@ -1834,22 +1970,45 @@ BOTSIM.physics = (function () {
                 }
                 stepObject(movingObj, t);
                 // Check if it's still colliding
-                if (isStatic) {
-                    isColliding = detectSingleStaticCollision(collidingObj1,
-                        collidingObj2);
-                } else {
-                    isColliding = detectDynamicCollision(collidingObj1,
-                        collidingObj2);
-                }
+                isColliding = detectCollision(collidingObj1,
+                    collidingObj2, isStatic);
                 // Cut tStep in two
                 tStep /= 2;
             }
-            // If it's still colliding, step it back to a guaranteed
-            //  good spot
+            // If it's still colliding, go back to the last good
+            // position
             if (isColliding) {
-                t -= tStep * 2;
+                t = 0;
                 stepObject(movingObj, t);
+                isColliding = detectCollision(collidingObj1,
+                    collidingObj2, isStatic);
             }
+            // If that's still no good, then we need to start backing
+            // up 
+            /*
+            if (isColliding) {
+                tStep = 1;
+                while (isColliding && t > -100) {
+                    t -= 1;
+                    stepObject(movingObj, t);
+                    detectCollision();
+                }
+                tStep = 0.5;
+                while (dt * tStep > 0.000001) {
+                    // Step the object forward or backward in time
+                    if (isColliding) {
+                        t -= tStep;
+                    } else {
+                        t += tStep;
+                    }
+                    stepObject(movingObj, t);
+                    // Check if it's still colliding
+                    detectCollision();
+                    // Cut tStep in two
+                    tStep /= 2;
+                }
+            }*/
+            console.log(t);
         }
 
         // If there is a collision
@@ -1857,12 +2016,10 @@ BOTSIM.physics = (function () {
             // Initialize convienience variables, but only if we have
             //  a collision
             worldToLocal.getInverse(obj.geometry.parent.matrixWorld);
-            position = obj.physics.position.clone().
-                    applyMatrix4(worldToLocal);
+            position = obj.physics.position.clone();
             quaternion = obj.physics.quaternion.clone();
             lastPosition =
-                obj.physics.lastGoodPosition.clone().
-                    applyMatrix4(worldToLocal);
+                obj.physics.lastGoodPosition.clone();
             lastQuaternion =
                 obj.physics.lastGoodQuaternion.clone();
             obj.geometry.collisions.forEach(function (collision) {
@@ -1874,32 +2031,13 @@ BOTSIM.physics = (function () {
                     // If it's controlled, then revert to a previous
                     // state with no collision
                     case 'controlled':
-                        // Ignore collisions with held objects
-                        if (otherObject.state !== 'held') {
-                            bisectCollision(obj, obj, otherObject, isStatic);
-                        }
+                        //bisectCollision(obj, obj, otherObject, isStatic);
+                        obj.geometry.position.add(collision.contactNormal.clone().
+                                     multiplyScalar(collision.penetration));
                         break;
                     case 'held':
                         /* We're just not going to bother with this for now.
-                           I'm not sure it's worth it.
-                        // If the object has moved, then revert the object
-                        if (!lastPosition.equals(position) ||
-                            !lastQuaternion.equals(quaternion)) {
-                            bisectCollision(obj, obj, otherObject, isStatic);
-                        } else {
-                            // Otherwise, the parent moved the object, so
-                            // find the object holding this one and back that
-                            // up
-                            ancestor = obj.geometry;
-                            while (!getPhysicsObject(ancestor) ||
-                                getPhysicsObject(ancestor).physics.state ===
-                                'controlled') {
-                                ancestor = ancestor.parent;
-                            }
-                            ancestor = getPhysicsObject(ancestor);
-                            bisectCollision(ancestor, obj, otherObject, isStatic);
-                        }
-                        */
+                           I'm not sure it's worth it. */
                         break;
                 }
             });
@@ -1926,11 +2064,11 @@ BOTSIM.on('scene-loaded', 'readyScene', BOTSIM);
 
 BOTSIM.on('scene-ready', 'startLoop', BOTSIM);
 
-BOTSIM.on('tick', function (dt) {
+BOTSIM.on('logic-tick', function (dt) {
     this.controls.update(60 * dt);
 }, BOTSIM);
 
-BOTSIM.on('tick', function (dt) {
+BOTSIM.on('physics-tick', function (dt) {
     BOTSIM.physics.updateObjects(dt);
     BOTSIM.physics.detectCollisions();
     BOTSIM.physics.resolveCollisions(dt);
