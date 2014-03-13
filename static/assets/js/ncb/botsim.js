@@ -230,7 +230,7 @@ Robot.modelLoaders = {
         function (obj) {
             var loader = new THREE.ObjectLoader();
 
-            loader.load('/assets/json/mouse.js', function (robotObj) {
+            loader.load('assets/json/mouse.js', function (robotObj) {
                 var camHeight, near;
 
                 robotObj.scale.set(0.2, 0.2, 0.2);
@@ -264,7 +264,7 @@ Robot.modelLoaders = {
     steve:
         function (obj) {
             var loader = new THREE.JSONLoader(true);
-            loader.load('/assets/json/steve.js', function (geometry, materials) {
+            loader.load('assets/json/steve.js', function (geometry, materials) {
                 var i, camHeight, near,
                     steve = new THREE.SkinnedMesh(geometry,
                         new THREE.MeshFaceMaterial(materials)),
