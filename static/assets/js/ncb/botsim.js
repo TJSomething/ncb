@@ -1271,9 +1271,10 @@ BOTSIM.physics = (function () {
         // Update position and velocity
         if (obj.physics.state === 'controlled' ||
             obj.physics.state === 'falling') {
-            //obj.geometry.position.y -= dt;
-            //obj.geometry.updateMatrixWorld();
+            obj.geometry.position.y -= dt;
         }
+        obj.geometry.updateMatrixWorld();
+
         position = obj.geometry.positionWorld();
         quaternion = obj.geometry.quaternion;
 
