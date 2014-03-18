@@ -588,94 +588,139 @@ BOTSIM.physics = (function () {
     }
 
     function resolveCollision(dt, obj) {
-        var worldToLocal = new THREE.Matrix4(),
-            position,
-            quaternion,
-            lastPosition,
-            lastQuaternion,
-            isStatic,
-            otherObject,
-            newCollision,
-            displacement,
-            holder;
+        function resolveControlled(obj, otherObject, isStatic) {
+            var newCollision = detectCollision(obj, otherObject, isStatic),
+                displacement;
+
+            // Ignore collisions with held objects
+            if (newCollision &&
+                otherObject.physics.state !== 'held') {
+                displacement = newCollision.contactNormal.clone().
+                        multiplyScalar(newCollision.penetration);
+                obj.geometry.position.add(displacement);
+                // If we get pushed up, neutralize speed
+                if (displacement.y > 0) {
+                    obj.physics.verticalVelocity = 0;
+                }
+                obj.geometry.updateMatrixWorld();
+            }
+        }
+
+        function resolveHeld(obj, otherObject, isStatic) {
+            // If the object is held, then we'll displace the
+            // holding object, unless the other object is
+            // the holding object
+            var holder = getHoldingObject(obj),
+                shoulder = obj.geometry.parent.parent,
+                newCollision,
+                displacement,
+                worldToBody = new THREE.Matrix4(),
+                armVector,
+                armLength,
+                displacementAlongArm,
+                displacementPerpendicularToArm,
+                angularDisplacement;
+
+            if (otherObject !== holder) {
+                newCollision = detectCollision(obj, otherObject, isStatic);
+                if (newCollision) {
+                    displacement = newCollision.contactNormal.clone().
+                            multiplyScalar(newCollision.penetration);
+                    // All calculation should be done in body space
+                    /*holder.geometry.parent.matrixWorld.getInverse(worldToBody);
+
+                    
+
+                    armVector = shoulder.positionWorld().clone().
+                        sub(holder.geometry.positionWorld()).
+                        applyMatrix4(worldToBody);
+
+                    armLength = armVector.length();
+
+                    // Normalize the arm vector
+                    armVector.divideScalar(armLength);
+
+                    displacementAlongArm = armVector.clone().
+                        multiplyScalar(-displacement.dot(armVector));
+
+                    // All the displacement that's not along the arm
+                    //  is perpendicular
+                    displacementPerpendicularToArm = displacement.clone().
+                        sub(displacementAlongArm);
+                    displacementPerpendicularToArm.x = 0;
+                    displacementPerpendicularToArm.z = 0;
+
+
+                    angularDisplacement = displacementPerpendicularToArm.
+                        clone().
+                        cross(armVector).
+                        multiplyScalar(armLength);
+
+                    shoulder.rotateOnAxis(
+                        angularDisplacement.clone().normalize(),
+                        angularDisplacement.length());
+
+                    // Redo displacement along arm to take into account the
+                    //  fact that the held object did not move in a line
+                    //  when rotating
+                    shoulder.updateMatrixWorld();
+                    armVector = shoulder.positionWorld().clone().
+                        sub(holder.geometry.positionWorld()).
+                        applyMatrix4(worldToBody);
+                    displacementAlongArm = armVector.clone().
+                        multiplyScalar(displacement.dot(armVector));
+
+                    holder.geometry.position.add(displacementAlongArm);*/
+                    holder.geometry.position.add(displacement);
+
+                    // If we get pushed up, neutralize speed
+                    if (displacement.y > 0) {
+                        holder.physics.verticalVelocity = 0;
+                    }
+                    holder.geometry.updateMatrixWorld();
+                }
+            }
+        }
+
+        function resolveFalling(obj, otherObject, isStatic) {
+            var newCollision = detectCollision(obj, otherObject, isStatic),
+                displacement;
+
+            if (newCollision) {
+                displacement = newCollision.contactNormal.clone().
+                        multiplyScalar(newCollision.penetration);
+                obj.geometry.position.add(displacement);
+                obj.geometry.updateMatrixWorld();
+                // If we hit the ground, then stop falling
+                if (displacement.y > 0 &&
+                    newCollision.isEnvironment) {
+                    obj.physics.state = 'rest';
+                }
+            }
+        }
 
         // If there is a collision
         if (obj.geometry.collisions.length > 0) {
-            // Initialize convienience variables, but only if we have
-            //  a collision
-            worldToLocal.getInverse(obj.geometry.parent.matrixWorld);
-            position = obj.physics.position.clone();
-            quaternion = obj.physics.quaternion.clone();
-            lastPosition =
-                obj.physics.lastGoodPosition.clone();
-            lastQuaternion =
-                obj.physics.lastGoodQuaternion.clone();
             obj.geometry.collisions.sort(function (a, b) {
                 return b.penetration - a.penetration;
             });
             obj.geometry.collisions.forEach(function (collision) {
-                isStatic = collision.isEnvironment;
-                otherObject = getPhysicsObject(
-                    collision.otherObject,
-                    isStatic);
+                var isStatic = collision.isEnvironment,
+                    otherObject = getPhysicsObject(
+                        collision.otherObject,
+                        isStatic);
+
                 obj.geometry.updateMatrixWorld();
+
                 switch (obj.physics.state) {
                     case 'controlled':
-                        newCollision = detectCollision(
-                            obj,
-                            otherObject,
-                            isStatic);
-                        // Ignore collisions with held objects
-                        if (newCollision) {
-                            displacement = newCollision.contactNormal.clone().
-                                    multiplyScalar(newCollision.penetration);
-                            obj.geometry.position.add(displacement);
-                            // If we get pushed up, neutralize speed
-                            if (displacement.y > 0) {
-                                obj.physics.verticalVelocity = 0;
-                            }
-                            //obj.geometry.position.y = 0;
-                            obj.geometry.updateMatrixWorld();
-                        }
+                        resolveControlled(obj, otherObject, isStatic);
                         break;
                     case 'held':
-                        // If the object is held, then we'll displace the
-                        // holding object, unless the other object is
-                        // the holding object
-                        holder = getHoldingObject(obj);
-                        if (otherObject !== holder) {
-                            newCollision = detectCollision(
-                                obj,
-                                otherObject,
-                                isStatic);
-                            if (newCollision) {
-                                displacement = newCollision.contactNormal.clone().
-                                        multiplyScalar(newCollision.penetration);
-                                holder.geometry.position.add(displacement);
-                                // If we get pushed up, neutralize speed
-                                if (displacement.y > 0) {
-                                    holder.physics.verticalVelocity = 0;
-                                }
-                                holder.geometry.updateMatrixWorld();
-                            }
-                        }
+                        resolveHeld(obj, otherObject, isStatic);
                         break;
                     case 'falling':
-                        newCollision = detectCollision(
-                            obj,
-                            otherObject,
-                            isStatic);
-                        if (newCollision) {
-                            displacement = newCollision.contactNormal.clone().
-                                    multiplyScalar(newCollision.penetration);
-                            obj.geometry.position.add(displacement);
-                            obj.geometry.updateMatrixWorld();
-                            // If we hit the ground, then stop falling
-                            if (displacement.y > 0 &&
-                                newCollision.isEnvironment) {
-                                obj.physics.state = 'rest';
-                            }
-                        }
+                        resolveFalling(obj, otherObject, isStatic);
                         break;
                 }
             });

@@ -30,7 +30,9 @@ BOTSIM.Robot = (function () {
                 armLength = forearmLength - rarm.children[0].position.y,
                 leftHandObject,
                 rightHandObject,
-                scale = 2/3;
+                scale = 2/3,
+                lArmAngularVelocity = 0,
+                rArmAngularVelocity = 0;
 
             // For some weird reason, Steve is the wrong size.
             steve.scale.set(scale, scale, scale);
@@ -179,25 +181,6 @@ BOTSIM.Robot = (function () {
                         Math.min(3*Math.PI/4, horiz));
             };
 
-            obj.setArmAngle = function (arm, horiz, vert, roll) {
-                var armObj;
-
-                // We're setting a specific arm
-                if (arm[0] === 'l' || arm[0] === 'L') {
-                    armObj = larm;
-                } else {
-                    armObj = rarm;
-                }
-
-                armObj.rotation.x = vert;
-                // We need to clamp motion to force motion to be
-                //  relatively realistic
-                armObj.rotation.y = Math.max(-Math.PI/2,
-                    Math.min(Math.PI, roll));
-                armObj.rotation.z = Math.max(-Math.PI/4,
-                        Math.min(3*Math.PI/4, horiz));
-            };
-
             obj.changeArmAngle = function (arm, horiz, vert, roll) {
                 var armObj;
 
@@ -299,7 +282,10 @@ BOTSIM.Robot = (function () {
                     if (leftMotionRemaining === 0) {
                         obj.app.fire('left-arm-done');
                     }
+                } else {
+                    obj.flexShoulder('left', lArmAngularVelocity * dt);
                 }
+
                 if (rightMotionRemaining > 0) {
                     rightMotionRemaining =
                         moveArm(rarm,
@@ -308,6 +294,8 @@ BOTSIM.Robot = (function () {
                     if (rightMotionRemaining === 0) {
                         obj.app.fire('right-arm-done');
                     }
+                } else {
+                    obj.flexShoulder('right', rArmAngularVelocity * dt);
                 }
             }
             obj.app.on('logic-tick', function (dt) { moveArms(dt); });
@@ -401,6 +389,22 @@ BOTSIM.Robot = (function () {
                 }
             };
 
+            document.addEventListener( 'keydown', function (event) {
+                switch (event.keyCode) {
+                    case 82: // R
+                        lArmAngularVelocity = +1;
+                        break;
+                    case 70: // F
+                        lArmAngularVelocity = -1;
+                        break;
+                    case 84: // T
+                        rArmAngularVelocity = +1;
+                        break;
+                    case 71: // G
+                        rArmAngularVelocity = -1;
+                        break;
+                }
+            }, false );
 
             document.addEventListener( 'keyup', function (event) {
                 switch (event.keyCode) {
@@ -412,6 +416,18 @@ BOTSIM.Robot = (function () {
                         } else {
                             obj.pickUpNearest();
                         }
+                        break;
+                    case 82: // R
+                        lArmAngularVelocity = 0;
+                        break;
+                    case 70: // F
+                        lArmAngularVelocity = 0;
+                        break;
+                    case 84: // T
+                        rArmAngularVelocity = 0;
+                        break;
+                    case 71: // G
+                        rArmAngularVelocity = 0;
                         break;
                 }
             }, false );
