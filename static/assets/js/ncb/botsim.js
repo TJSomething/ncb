@@ -1079,7 +1079,8 @@ BOTSIM.startLoop = function () {
     (function () {
         var time = Date.now()/1000,
             accumulator = 0,
-            tickLength = 1/that.FPS;
+            tickLength = 1/that.FPS,
+            dt = 0;
 
         window.setInterval(
             function () {
@@ -1087,12 +1088,19 @@ BOTSIM.startLoop = function () {
                 time = Date.now()/1000;
 
                 if (accumulator > tickLength) {
+                    dt = accumulator - (accumulator % tickLength);
+                    // If we have an especially long frame
+                    if (dt > 0.5) {
+                        // We're going to pretend that it was short
+                        dt = tickLength;
+                        // And reset the accumulator
+                        accumulator = 0;
+                    } else {
+                        accumulator -= dt;
+                    }
                     that.logicStats.begin();
-                    that.fire('logic-tick',
-                        accumulator - (accumulator % tickLength));
-                    that.fire('physics-tick',
-                        accumulator - (accumulator % tickLength));
-                    accumulator %= tickLength;
+                    that.fire('logic-tick', dt);
+                    that.fire('physics-tick', dt);
                     that.logicStats.end();
                 }
 
@@ -1174,6 +1182,8 @@ BOTSIM.physics = (function () {
                         };
                     }())
             });
+        
+        obj.physics.verticalVelocity = obj.physics.verticalVelocity || 0;
 
         dynamicObjects.push(obj);
         dynamicObjectIndices[obj.geometry.id] = dynamicObjects.length - 1;
@@ -1271,7 +1281,8 @@ BOTSIM.physics = (function () {
         // Update position and velocity
         if (obj.physics.state === 'controlled' ||
             obj.physics.state === 'falling') {
-            obj.geometry.position.y -= dt;
+            obj.physics.verticalVelocity -= 9.8 * dt;
+            obj.geometry.position.y += dt * obj.physics.verticalVelocity;
         }
         obj.geometry.updateMatrixWorld();
 
@@ -1722,7 +1733,11 @@ BOTSIM.physics = (function () {
                             displacement = newCollision.contactNormal.clone().
                                     multiplyScalar(newCollision.penetration);
                             obj.geometry.position.add(displacement);
-                            obj.geometry.position.y = 0;
+                            // If we get pushed up, neutralize speed
+                            if (displacement.y > 0) {
+                                obj.physics.verticalVelocity = 0;
+                            }
+                            //obj.geometry.position.y = 0;
                             obj.geometry.updateMatrixWorld();
                         }
                         break;
@@ -1740,7 +1755,10 @@ BOTSIM.physics = (function () {
                                 displacement = newCollision.contactNormal.clone().
                                         multiplyScalar(newCollision.penetration);
                                 holder.geometry.position.add(displacement);
-                                holder.geometry.position.y = 0;
+                                // If we get pushed up, neutralize speed
+                                if (displacement.y > 0) {
+                                    holder.physics.verticalVelocity = 0;
+                                }
                                 holder.geometry.updateMatrixWorld();
                             }
                         }
