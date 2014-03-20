@@ -448,7 +448,7 @@ BOTSIM.startLoop = function () {
                 if (accumulator > tickLength) {
                     dt = accumulator - (accumulator % tickLength);
                     // If we have an especially long frame
-                    if (dt > 0.5) {
+                    if (dt > 0.1) {
                         // We're going to pretend that it was short
                         dt = tickLength;
                         // And reset the accumulator
