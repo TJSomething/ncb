@@ -619,7 +619,8 @@ BOTSIM.physics = (function () {
                 armLength,
                 displacementAlongArm,
                 displacementPerpendicularToArm,
-                angularDisplacement;
+                angularDisplacement,
+                yDisplacement;
 
             if (otherObject !== holder) {
                 newCollision = detectCollision(obj, otherObject, isStatic);
@@ -627,29 +628,33 @@ BOTSIM.physics = (function () {
                     displacement = newCollision.contactNormal.clone().
                             multiplyScalar(newCollision.penetration);
                     // All calculation should be done in body space
-                    /*holder.geometry.parent.matrixWorld.getInverse(worldToBody);
-
-                    
+                    worldToBody.extractRotation(shoulder.parent.matrixWorld);
+                    worldToBody.getInverse(worldToBody);
 
                     armVector = shoulder.positionWorld().clone().
-                        sub(holder.geometry.positionWorld()).
-                        applyMatrix4(worldToBody);
+                        sub(obj.geometry.positionWorld());
+
+                    armVector.applyMatrix4(worldToBody);
 
                     armLength = armVector.length();
 
                     // Normalize the arm vector
                     armVector.divideScalar(armLength);
 
+                    // We're only going to move the arm with vertical
+                    // displacement, so that moving the arm doesn't lift
+                    // the robot
+                    yDisplacement = new THREE.Vector3(0, displacement.y,
+                        0);
+                    displacement.y = 0;
+
                     displacementAlongArm = armVector.clone().
-                        multiplyScalar(-displacement.dot(armVector));
+                        multiplyScalar(yDisplacement.dot(armVector));
 
                     // All the displacement that's not along the arm
                     //  is perpendicular
-                    displacementPerpendicularToArm = displacement.clone().
+                    displacementPerpendicularToArm = yDisplacement.clone().
                         sub(displacementAlongArm);
-                    displacementPerpendicularToArm.x = 0;
-                    displacementPerpendicularToArm.z = 0;
-
 
                     angularDisplacement = displacementPerpendicularToArm.
                         clone().
@@ -660,17 +665,6 @@ BOTSIM.physics = (function () {
                         angularDisplacement.clone().normalize(),
                         angularDisplacement.length());
 
-                    // Redo displacement along arm to take into account the
-                    //  fact that the held object did not move in a line
-                    //  when rotating
-                    shoulder.updateMatrixWorld();
-                    armVector = shoulder.positionWorld().clone().
-                        sub(holder.geometry.positionWorld()).
-                        applyMatrix4(worldToBody);
-                    displacementAlongArm = armVector.clone().
-                        multiplyScalar(displacement.dot(armVector));
-
-                    holder.geometry.position.add(displacementAlongArm);*/
                     holder.geometry.position.add(displacement);
 
                     // If we get pushed up, neutralize speed
