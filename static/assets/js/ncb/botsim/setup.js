@@ -13,7 +13,10 @@ makePublisher(BOTSIM);
 BOTSIM.initViewport = function () {
     var width, height, left, top;
 
-    this.container = document.getElementById('botsim-body');
+    this.container = document.createElement('div');
+    document.getElementById('botsim-body').appendChild(this.container);
+    this.container.style.position = 'relative';
+
     width = this.container.offsetWidth;
     height = width / this.ASPECT;
     left = this.container.offsetLeft;
@@ -31,15 +34,15 @@ BOTSIM.initViewport = function () {
     // FPS indicators
     this.renderStats = new Stats();
     this.renderStats.domElement.style.position = 'absolute';
-    this.renderStats.domElement.style.top = top + 'px';
-    this.renderStats.domElement.style.left = left + 'px';
+    this.renderStats.domElement.style.top = '0px';
+    this.renderStats.domElement.style.left = '0px';
     this.renderStats.setMode(1);
     this.container.appendChild(this.renderStats.domElement);
     
     this.logicStats = new Stats();
     this.logicStats.domElement.style.position = 'absolute';
-    this.logicStats.domElement.style.top = top + 50 + 'px';
-    this.logicStats.domElement.style.left = left + 'px';
+    this.logicStats.domElement.style.top = '50px';
+    this.logicStats.domElement.style.left = '0px';
     this.logicStats.setMode(1);
     this.container.appendChild(this.logicStats.domElement);
 };
