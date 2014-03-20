@@ -53,17 +53,43 @@ BOTSIM.loadScene = function (files, character) {
         app = this,
         fileType = 'dae';
 
+    function loadURL(url) {
+        var xhr = new XMLHttpRequest();
+
+        xhr.open('GET', url, true);
+        xhr.responseType = 'blob';
+        tasksLeft += 1;
+
+        xhr.addEventListener('load', function () {
+            if (xhr.status === 200) {
+                // Throw on the name, which we use for extension recognition
+                xhr.response.name = url;
+
+                loadFile(xhr.response);
+                taskDone();
+            }
+        }, false);
+
+        xhr.send();
+    }
+
     // Loads each file
     function loadFile(file) {
         var name = file.name,
             type = file.type,
             reader = new FileReader();
 
+        // If we got a URL, load that separately
+        if (typeof file === 'string') {
+            loadURL(file);
+            return;
+        }
+
         if (type.slice(0, 5) === 'image') {
             tasksLeft += 1;
 
-            reader.onload = function () {
-                imageLibrary[name] = reader.result;
+            reader.onload = function (evt) {
+                imageLibrary[name] = evt.target.result;
                 taskDone();
             };
 
@@ -73,8 +99,8 @@ BOTSIM.loadScene = function (files, character) {
 
             fileType = 'dae';
 
-            reader.onload = function () {
-                sceneSource = reader.result;
+            reader.onload = function (evt) {
+                sceneSource = evt.target.result;
                 taskDone();
             };
 
@@ -84,8 +110,8 @@ BOTSIM.loadScene = function (files, character) {
 
             fileType = 'kmz';
 
-            reader.onload = function () {
-                sceneBuffer = reader.result;
+            reader.onload = function (evt) {
+                sceneBuffer = evt.target.result;
                 taskDone();
             };
 
