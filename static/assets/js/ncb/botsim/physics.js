@@ -649,7 +649,7 @@ BOTSIM.physics = (function () {
                     displacement.y = 0;
 
                     displacementAlongArm = armVector.clone().
-                        multiplyScalar(yDisplacement.dot(armVector));
+                        multiplyScalar(-yDisplacement.dot(armVector));
 
                     // All the displacement that's not along the arm
                     //  is perpendicular
