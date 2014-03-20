@@ -7,7 +7,6 @@ var BOTSIM = BOTSIM ||  {};
 
 BOTSIM.ASPECT = 16 / 9;
 BOTSIM.FPS = 60;
-BOTSIM.CHARACTER = 'mouse';
 
 makePublisher(BOTSIM);
 
@@ -45,7 +44,7 @@ BOTSIM.initViewport = function () {
     this.container.appendChild(this.logicStats.domElement);
 };
 
-BOTSIM.loadScene = function (files) {
+BOTSIM.loadScene = function (files, character) {
     var tasksLeft = 0,
         i,
         imageLibrary = {},
@@ -136,7 +135,7 @@ BOTSIM.loadScene = function (files) {
                     app.scene = new THREE.Scene();
                     app.scene.add(obj.scene);
 
-                    app.fire('scene-loaded');
+                    app.fire('scene-loaded', character);
                 });
             } else {
                 window.alert('No level found. Try loading again.');
@@ -154,7 +153,7 @@ BOTSIM.loadScene = function (files) {
 
 // This grabs and modifies objects in the scene that are important so that
 //  the simulation can use them.
-BOTSIM.readyScene = function () {
+BOTSIM.readyScene = function (character) {
     var app = this,
         // This is so we can do a few asynchronous tasks
         tasksLeft = 0,
@@ -195,7 +194,7 @@ BOTSIM.readyScene = function () {
             app.on('robot-ready', taskDone);
 
             // Set up our robot
-            app.robot = new BOTSIM.Robot(obj, BOTSIM.CHARACTER, app);
+            app.robot = new BOTSIM.Robot(obj, character, app);
         }
     }
 
