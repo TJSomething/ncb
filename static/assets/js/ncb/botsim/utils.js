@@ -10,6 +10,28 @@ window.requestAnimationFrame = window.requestAnimationFrame ||
                                window.webkitRequestAnimationFrame ||
                                window.msRequestAnimationFrame;
 
+// ES6 Sign function
+(function (global) {
+  var isNaN = Number.isNaN;
+
+  Object.defineProperty(Math, 'sign', {
+    value: function sign(value) {
+      var n = +value;
+      if (isNaN(n))
+        return n /* NaN */;
+
+      if (n === 0)
+        return n; // Keep the sign of the zero.
+
+      return (n < 0) ? -1 : 1;
+    },
+    configurable: true,
+    enumerable: false,
+    writable: true
+  });
+})(this);
+
+
 // A nice implementation of the observer pattern from
 //  Javascript patterns by Stoyan Stefanov
 var publisher = {
