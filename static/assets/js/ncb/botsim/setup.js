@@ -288,8 +288,16 @@ BOTSIM.readyScene = function (character) {
             ['lightMap', 'specularMap', 'envMap', 'map'].forEach(
                 function (mapType) {
                     if (material[mapType]) {
-                        material[mapType].image =
-                            resizeNPOTImage(material[mapType].image);
+                        // If the texture isn't loaded yet, then we'll need to resize it later
+                        material[mapType].image.addEventListener('load', (function () {
+                            var materialMap = material[mapType];
+                            return function () {
+                                    materialMap.image =
+                                        resizeNPOTImage(materialMap.image);
+                            };
+                        }()));
+                        // If it has been loaded already, then we'll resize it
+                        resizeNPOTImage(material[mapType].image);
                     }
                 });
         }
