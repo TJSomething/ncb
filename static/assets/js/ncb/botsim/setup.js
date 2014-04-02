@@ -28,6 +28,7 @@ BOTSIM.initViewport = function () {
     });
 
     this.renderer.setSize(width, height);
+    this.renderer.setClearColor('#87CEEB', 1);
 
     this.container.appendChild(this.renderer.domElement);
     
@@ -297,7 +298,8 @@ BOTSIM.readyScene = function (character) {
                             };
                         }()));
                         // If it has been loaded already, then we'll resize it
-                        resizeNPOTImage(material[mapType].image);
+                        material[mapType].image =
+                            resizeNPOTImage(material[mapType].image);
                     }
                 });
         }
