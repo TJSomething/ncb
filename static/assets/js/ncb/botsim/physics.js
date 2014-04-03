@@ -714,21 +714,98 @@ BOTSIM.physics = (function () {
             ymin = aabb.min.y,
             zmax = aabb.max.z,
             zmin = aabb.min.z,
-            boxes = [aabb],
-            newBoxes,
-            // These will be the minimal corner of each box
-            x, y, z,
+            boxes = [],
             xScale = xmax - xmin,
             yScale = ymax - ymin,
-            zScale = zmax - zmin,
-            shrinkX, shrinkY, shrinkZ,
-            i, subbox,
-            faces = obj.physics.faces;
+            zScale = zmax - zmin;
 
-        function doFacesIntersect(box) {
-            return faces.some(function (face) {
+        function findIntersectingFaces(box, faces) {
+            return faces.filter(function (face) {
                 return testOBBTri(convertBox3ToOBB(box), face);
             });
+        }
+
+        function median(ary) {
+            var mid;
+            if (ary.length === 0) {
+                return null;
+            }
+            ary.sort(function (a,b){return a - b;});
+            mid = Math.floor(ary.length / 2);
+            if ((ary.length % 2) == 1) { // length is odd
+                return ary[mid];
+            } else {
+                return (ary[mid - 1] + ary[mid]) / 2;
+            }
+        }
+
+        function splitBox(box, faces) {
+            var extent = box.max.clone().sub(box.min),
+                splitAxis,
+                splitAxisLength = Infinity,
+                currentAxis,
+                points = [],
+                maxPoint,
+                minPoint,
+                midpoint,
+                leftBox,
+                leftFaces,
+                rightBox,
+                rightFaces;
+
+            // Find the largest axis to use as the splitting axis
+            for (currentAxis = 0; currentAxis < 3; currentAxis += 1) {
+                if (extent.getComponent(currentAxis) < splitAxisLength &&
+                    extent.getComponent(currentAxis) > scale) {
+                    splitAxis = currentAxis;
+                    splitAxisLength = extent.getComponent(currentAxis);
+                }
+            }
+
+            // If every dimension is smaller than the scale, save the
+            // box and terminate
+            if (splitAxis === undefined) {
+                boxes.push(box);
+                return;
+            }
+
+            // Note the maximum and minimum points on the splitting axis
+            maxPoint = box.max.getComponent(splitAxis);
+            minPoint = box.min.getComponent(splitAxis);
+            points.push(minPoint);
+            points.push(maxPoint);
+
+            // Project the points of all faces onto the splitting axis
+            faces.forEach(function (face) {
+                var i, point;
+
+                for (i = 0; i < 3; i += 1) {
+                    point = face[i].getComponent(splitAxis);
+                    if (point < maxPoint &&
+                        point > minPoint) {
+                        points.push(point);
+                    }
+                }
+            });
+            
+            // Find the median point
+            midpoint = (maxPoint + minPoint)/2;
+
+            // Split the box at the midpoint
+            leftBox = new THREE.Box3(box.min.clone(),
+                box.max.clone());
+            leftBox.max.setComponent(splitAxis, midpoint);
+            rightBox = new THREE.Box3(box.min.clone(),
+                box.max.clone());
+            rightBox.min.setComponent(splitAxis, midpoint);
+
+            // Find the faces for each box
+            leftFaces = findIntersectingFaces(leftBox, faces);
+            rightFaces = findIntersectingFaces(rightBox, faces);
+
+            // Recurse into each box
+            splitBox(leftBox, leftFaces);
+            splitBox(rightBox, rightFaces);
         }
 
         // Let's only try subdividing if there's thickness. This test
@@ -737,60 +814,9 @@ BOTSIM.physics = (function () {
             yScale !== 0 &&
             zScale !== 0) {
             // Build all candidate boxes recursively
-            while (xScale > scale ||
-                   yScale > scale ||
-                   zScale > scale) {
-                newBoxes = [];
-
-                // The next level should have boxes half the size of the
-                // last one, if it needs to shrink
-                if (xScale > scale) {
-                    xScale /= 2;
-                    shrinkX = 2;
-                } else {
-                    shrinkX = 1;
-                }
-                if (yScale > scale) {
-                    yScale /= 2;
-                    shrinkY = 2;
-                } else {
-                    shrinkY = 1;
-                }
-                if (zScale > scale) {
-                    zScale /= 2;
-                    shrinkZ = 2;
-                } else {
-                    shrinkZ = 1;
-                }
-
-                // For each box from the last level
-                for (i = 0; i < boxes.length; i += 1) {
-                    // Divide into eight subboxes and if they intersect
-                    // with any faces, then add them for this level
-                    for (x = 0; x < shrinkX; x += 1) {
-                        for (y = 0; y < shrinkY; y += 1) {
-                            for (z = 0; z < shrinkZ; z += 1) {
-                                subbox = new THREE.Box3();
-                                subbox.min = boxes[i].min.clone();
-                                subbox.min.x += x * xScale;
-                                subbox.min.y += y * yScale;
-                                subbox.min.z += z * zScale;
-                                subbox.max = subbox.min.clone();
-                                subbox.max.x += xScale;
-                                subbox.max.y += yScale;
-                                subbox.max.z += zScale;
-
-                                if (doFacesIntersect(subbox)) {
-                                    newBoxes.push(subbox);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Change our boxes to the next level
-                boxes = newBoxes;
-            }
+            splitBox(aabb, obj.physics.faces);
+        } else {
+            boxes.push(aabb);
         }
 
         
