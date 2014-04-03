@@ -7,11 +7,14 @@ var BOTSIM = BOTSIM || {};
 
 BOTSIM.physics = (function () {
     var staticObjects = [],
+        staticOBBs = [],
         dynamicObjects = [],
         // This is used to quickly address objects
         dynamicObjectIndices = {},
         staticObjectIndices = {},
-        EPSILON = 0.000001;
+        EPSILON = 0.000001,
+        staticCollisionResolution = 1,
+        collisionVolumeObjects = new THREE.Object3D();
 
     function initDynamicObject(obj) {
         var bWorld = (new THREE.Box3()).setFromObject(obj.geometry),
@@ -118,6 +121,8 @@ BOTSIM.physics = (function () {
                          sub(aabbWorld.min).
                          divideScalar(2)
         };
+
+        obj.physics.obbs = buildObjectOBBs(obj, staticCollisionResolution);
 
         staticObjects.push(obj);
         staticObjectIndices[obj.geometry.id] = staticObjects.length - 1;
@@ -447,6 +452,369 @@ BOTSIM.physics = (function () {
         };
     }
 
+    /* An OBB triangle intersection test. Not useful for collision resolution.
+     */
+    function testOBBTri(obb, tri) {
+        var i,
+            v = [new THREE.Vector3(),
+                 new THREE.Vector3(),
+                 new THREE.Vector3()],
+            e = [new THREE.Vector3(),
+                 new THREE.Vector3(),
+                 new THREE.Vector3()],
+            fex,
+            fey,
+            fez,
+            // Variables for axis tests
+            p0, p1, p2, min, max, rad,
+            vmax = new THREE.Vector3(),
+            vmin = new THREE.Vector3(),
+            normal = new THREE.Vector3(),
+            penetration = Infinity,
+            contactNormal = new THREE.Vector3();
+
+        function planeBoxOverlap(normal, vert, maxbox) {
+            var q, v;
+
+            for (q = 0; q < 3; q += 1) {
+                v = vert.getComponent(q);
+                if (normal.getComponent(q) > 0) {
+                    vmin.setComponent(q, -maxbox.getComponent(q) - v);
+                    vmax.setComponent(q, maxbox.getComponent(q) - v);
+                } else {
+                    vmin.setComponent(q, maxbox.getComponent(q) - v);
+                    vmax.setComponent(q, -maxbox.getComponent(q) - v);
+                }
+            }
+
+            if (normal.dot(vmin) > 0) {
+                return false;
+            }
+            if (normal.dot(vmax) >= 0) {
+                if (-normal.clone().normalize().dot(vmin) < penetration) {
+                    contactNormal = normal.clone().normalize();
+                    penetration = -contactNormal.dot(vmin);
+                }
+                return true;
+            }
+
+            return false;
+        }
+
+        // Axis tests
+        function axisTestX01(a, b, fa, fb) {
+            p0 = a * v[0].y - b * v[0].z;
+            p2 = a * v[2].y - b * v[2].z;
+            if (p0 < p2) {
+                min = p0;
+                max = p2;
+            } else {
+                min = p2;
+                max = p0;
+            }
+            rad = fa * obb.e.y + fb * obb.e.z;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function axisTestX2(a, b, fa, fb) {
+            p0 = a * v[0].y - b * v[0].z;
+            p1 = a * v[1].y - b * v[1].z;
+            if (p0 < p1) {
+                min = p0;
+                max = p1;
+            } else {
+                min = p1;
+                max = p0;
+            }
+            rad = fa * obb.e.y + fb * obb.e.z;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function axisTestY02(a, b, fa, fb) {
+            p0 = -a * v[0].x + b * v[0].z;
+            p2 = -a * v[2].x + b * v[2].z;
+            if (p0 < p2) {
+                min = p0;
+                max = p2;
+            } else {
+                min = p2;
+                max = p0;
+            }
+            rad = fa * obb.e.x + fb * obb.e.z;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function axisTestY1(a, b, fa, fb) {
+            p0 = -a * v[0].x + b * v[0].z;
+            p1 = -a * v[1].x + b * v[1].z;
+            if (p0 < p1) {
+                min = p0;
+                max = p1;
+            } else {
+                min = p1;
+                max = p0;
+            }
+            rad = fa * obb.e.x + fb * obb.e.z;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function axisTestZ12(a, b, fa, fb) {
+            p1 = a * v[1].x - b * v[1].y;
+            p2 = a * v[2].x - b * v[2].y;
+            if (p2 < p1) {
+                min = p2;
+                max = p1;
+            } else {
+                min = p1;
+                max = p2;
+            }
+            rad = fa * obb.e.x + fb * obb.e.y;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function axisTestZ0(a, b, fa, fb) {
+            p0 = a * v[0].x - b * v[0].y;
+            p1 = a * v[1].x - b * v[1].y;
+            if (p0 < p1) {
+                min = p0;
+                max = p1;
+            } else {
+                min = p1;
+                max = p0;
+            }
+            rad = fa * obb.e.x + fb * obb.e.y;
+            if (min > rad || max < -rad) {
+                return false;
+            }
+            return true;
+        }
+
+        function findMinMax(x0, x1, x2) {
+            min = max = x0;
+            if (x1 < min) {
+                min = x1;
+            } else if (x1 > max) {
+                max = x1;
+            }
+            if (x2 < min) {
+                min = x2;
+            } else if (x2 > max) {
+                max = x2;
+            }
+        }
+
+        // Calculate the rotated triangle, which reduces this to an
+        // AABB-triangle test
+        for (i = 0; i < 3; i += 1) {
+            v[i].subVectors(tri[i], obb.c);
+            v[i].set(v[i].dot(obb.u[0]),
+                     v[i].dot(obb.u[1]),
+                     v[i].dot(obb.u[2]));
+        }
+
+        // Compute edges
+        for (i = 0; i < 3; i += 1) {
+            e[i].subVectors(v[(i + 1) % 3], v[i]);
+        }
+
+        fex = Math.abs(e[0].x);
+        fey = Math.abs(e[0].y);
+        fez = Math.abs(e[0].z);
+        if (!axisTestX01(e[0].z, e[0].y, fez, fey) ||
+            !axisTestY02(e[0].z, e[0].x, fez, fex) ||
+            !axisTestZ12(e[0].y, e[0].x, fey, fex)) {
+            return false;
+        }
+
+        fex = Math.abs(e[1].x);
+        fey = Math.abs(e[1].y);
+        fez = Math.abs(e[1].z);
+        if (!axisTestX01(e[1].z, e[1].y, fez, fey) ||
+            !axisTestY02(e[1].z, e[1].x, fez, fex) ||
+            !axisTestZ0(e[1].y, e[1].x, fey, fex)) {
+            return false;
+        }
+
+        fex = Math.abs(e[2].x);
+        fey = Math.abs(e[2].y);
+        fez = Math.abs(e[2].z);
+        if (!axisTestX2(e[2].z, e[2].y, fez, fey) ||
+            !axisTestY1(e[2].z, e[2].x, fez, fex) ||
+            !axisTestZ12(e[2].y, e[2].x, fey, fex)) {
+            return false;
+        }
+
+        // Test for the AABB of the triangle
+        findMinMax(v[0].x, v[1].x, v[2].x);
+        if (min > obb.e.x ||
+            max < -obb.e.x) {
+            return false;
+        }
+
+        findMinMax(v[0].y, v[1].y, v[2].y);
+        if (min > obb.e.y ||
+            max < -obb.e.y) {
+            return false;
+        }
+
+        findMinMax(v[0].z, v[1].z, v[2].z);
+        if (min > obb.e.z ||
+            max < -obb.e.z) {
+            return false;
+        }
+
+        // Test if the box penetrates the triangle's plane
+        normal.crossVectors(e[0], e[1]);
+        if (!planeBoxOverlap(normal, v[0], obb.e)) {
+            return false;
+        }
+
+        return {
+            contactNormal: contactNormal,
+            penetration: penetration
+        };
+    }
+
+    function convertBox3ToOBB(box) {
+        return {
+            c: box.center(),
+            e: box.size().divideScalar(2),
+            u: [new THREE.Vector3(1, 0, 0),
+                new THREE.Vector3(0, 1, 0),
+                new THREE.Vector3(0, 0, 1)]
+        };
+    }
+
+    /** Makes an array of OBBs, given a geometry object and a scale
+
+        scale specifies stuff
+     */
+    function buildObjectOBBs(obj, scale) {
+        // Calculate bounding box
+        var aabb = (new THREE.Box3()).setFromObject(obj.geometry),
+            // Actual bounds
+            xmax = aabb.max.x,
+            xmin = aabb.min.x,
+            ymax = aabb.max.y,
+            ymin = aabb.min.y,
+            zmax = aabb.max.z,
+            zmin = aabb.min.z,
+            boxes = [aabb],
+            newBoxes,
+            // These will be the minimal corner of each box
+            x, y, z,
+            xScale = xmax - xmin,
+            yScale = ymax - ymin,
+            zScale = zmax - zmin,
+            shrinkX, shrinkY, shrinkZ,
+            i, subbox,
+            faces = obj.physics.faces;
+
+        function doFacesIntersect(box) {
+            return faces.some(function (face) {
+                return testOBBTri(convertBox3ToOBB(box), face);
+            });
+        }
+
+        // Let's only try subdividing if there's thickness. This test
+        //  also excludes the ground nicely
+        if (xScale !== 0 &&
+            yScale !== 0 &&
+            zScale !== 0) {
+            // Build all candidate boxes recursively
+            while (xScale > scale ||
+                   yScale > scale ||
+                   zScale > scale) {
+                newBoxes = [];
+
+                // The next level should have boxes half the size of the
+                // last one, if it needs to shrink
+                if (xScale > scale) {
+                    xScale /= 2;
+                    shrinkX = 2;
+                } else {
+                    shrinkX = 1;
+                }
+                if (yScale > scale) {
+                    yScale /= 2;
+                    shrinkY = 2;
+                } else {
+                    shrinkY = 1;
+                }
+                if (zScale > scale) {
+                    zScale /= 2;
+                    shrinkZ = 2;
+                } else {
+                    shrinkZ = 1;
+                }
+
+                // For each box from the last level
+                for (i = 0; i < boxes.length; i += 1) {
+                    // Divide into eight subboxes and if they intersect
+                    // with any faces, then add them for this level
+                    for (x = 0; x < shrinkX; x += 1) {
+                        for (y = 0; y < shrinkY; y += 1) {
+                            for (z = 0; z < shrinkZ; z += 1) {
+                                subbox = new THREE.Box3();
+                                subbox.min = boxes[i].min.clone();
+                                subbox.min.x += x * xScale;
+                                subbox.min.y += y * yScale;
+                                subbox.min.z += z * zScale;
+                                subbox.max = subbox.min.clone();
+                                subbox.max.x += xScale;
+                                subbox.max.y += yScale;
+                                subbox.max.z += zScale;
+
+                                if (doFacesIntersect(subbox)) {
+                                    newBoxes.push(subbox);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Change our boxes to the next level
+                boxes = newBoxes;
+            }
+        }
+
+        
+        // Help me with visualization
+        boxes.forEach(function (box) {
+            var geom = new THREE.CubeGeometry(1.01, 1.01, 1.01),
+                mesh = new THREE.Mesh(geom,
+                                      new THREE.MeshBasicMaterial({
+                                          color: 0x888888,
+                                          wireframe: true
+                                      }));
+
+            mesh.position = box.center();
+            mesh.scale.set(box.max.x - box.min.x,
+                           box.max.y - box.min.y,
+                           box.max.z - box.min.z);
+
+            collisionVolumeObjects.add(mesh);
+        });
+
+        // We'll convert those to OBBs
+        return boxes.map(convertBox3ToOBB);
+    }
+
     // Takes a dynamic physics object and checks if it's colliding
     //  with another dynamic physics object
     function detectDynamicCollision(obj1, obj2) {
@@ -469,16 +837,26 @@ BOTSIM.physics = (function () {
     // Detects a collision between a dynamic object and
     // a static object
     function detectSingleStaticCollision (obj1, obj2) {
-        var collision;
+        var collision, bestCollision = {
+                penetration: -Infinity
+            };
         // Prevent self testing
         if (obj1 !== obj2) {
-            // Oriented bounding box check
-            collision = testOBBOBB(obj1.physics.orientedBoundingBox,
-                    obj2.physics.orientedBoundingBox);
-            if (collision) {
-                collision.otherObject = obj2.geometry;
-                collision.isEnvironment = true;
-                return collision;
+            obj2.physics.obbs.forEach(function (obb) {
+                // Oriented bounding box check
+                collision = testOBBOBB(obj1.physics.orientedBoundingBox,
+                        obb);
+                if (collision) {
+                    collision.otherObject = obj2.geometry;
+                    collision.isEnvironment = true;
+                    if (collision.penetration > bestCollision.penetration) {
+                        bestCollision = collision;
+                    }
+                }
+            });
+
+            if (bestCollision.penetration > 0) {
+                return bestCollision;
             }
         }
 
@@ -728,11 +1106,20 @@ BOTSIM.physics = (function () {
         }
     }
 
+    function toggleCollisionVolumes() {
+        if (collisionVolumeObjects.parent) {
+            BOTSIM.scene.remove(collisionVolumeObjects);
+        } else {
+            BOTSIM.scene.add(collisionVolumeObjects);
+        }
+    }
+
     return {
             addObject: addObject,
             detectCollisions: detectCollisions,
             updateObjects: updateObjects,
             changeObjectState: changeObjectState,
-            resolveCollisions: resolveCollisions
+            resolveCollisions: resolveCollisions,
+            toggleCollisionVolumes: toggleCollisionVolumes
         };
 }());
