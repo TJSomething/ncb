@@ -7,7 +7,6 @@ var BOTSIM = BOTSIM || {};
 
 BOTSIM.physics = (function () {
     var staticObjects = [],
-        staticOBBs = [],
         dynamicObjects = [],
         // This is used to quickly address objects
         dynamicObjectIndices = {},
@@ -725,37 +724,44 @@ BOTSIM.physics = (function () {
             });
         }
 
-        function median(ary) {
-            var mid;
-            if (ary.length === 0) {
-                return null;
-            }
-            ary.sort(function (a,b){return a - b;});
-            mid = Math.floor(ary.length / 2);
-            if ((ary.length % 2) == 1) { // length is odd
-                return ary[mid];
-            } else {
-                return (ary[mid - 1] + ary[mid]) / 2;
-            }
+        // Finds all the faces that are in the box completely
+        function findContainedFaces(box, faces) {
+            return faces.filter(function (face) {
+                return box.containsPoint(face[0]) &&
+                       box.containsPoint(face[1]) &&
+                       box.containsPoint(face[2]);
+            });
         }
 
         function splitBox(box, faces) {
-            var extent = box.max.clone().sub(box.min),
+            var extent,
+                faceBox,
                 splitAxis,
-                splitAxisLength = Infinity,
+                splitAxisLength = -Infinity,
                 currentAxis,
-                points = [],
-                maxPoint,
-                minPoint,
                 midpoint,
                 leftBox,
                 leftFaces,
                 rightBox,
-                rightFaces;
+                rightFaces,
+                leftBoxes,
+                rightBoxes;
+
+            // Call it a day if there's nothing in the box
+            if (faces.length === 0) {
+                return [];
+            }
+
+            // Shrink the box to fit the faces better
+            faceBox = (new THREE.Box3()).setFromPoints(_.flatten(faces));
+            box = box.clone().intersect(faceBox);
+
+            // Calculate the extend of the box
+            extent = box.max.clone().sub(box.min);
 
             // Find the largest axis to use as the splitting axis
             for (currentAxis = 0; currentAxis < 3; currentAxis += 1) {
-                if (extent.getComponent(currentAxis) < splitAxisLength &&
+                if (extent.getComponent(currentAxis) > splitAxisLength &&
                     extent.getComponent(currentAxis) > scale) {
                     splitAxis = currentAxis;
                     splitAxisLength = extent.getComponent(currentAxis);
@@ -764,32 +770,13 @@ BOTSIM.physics = (function () {
 
             // If every dimension is smaller than the scale, save the
             // box and terminate
-            if (splitAxis === undefined) {
-                boxes.push(box);
-                return;
+            if (splitAxis === undefined ||
+                (extent.x === 0 || extent.y === 0 || extent.z === 0)) {
+                return [box];
             }
-
-            // Note the maximum and minimum points on the splitting axis
-            maxPoint = box.max.getComponent(splitAxis);
-            minPoint = box.min.getComponent(splitAxis);
-            points.push(minPoint);
-            points.push(maxPoint);
-
-            // Project the points of all faces onto the splitting axis
-            faces.forEach(function (face) {
-                var i, point;
-
-                for (i = 0; i < 3; i += 1) {
-                    point = face[i].getComponent(splitAxis);
-                    if (point < maxPoint &&
-                        point > minPoint) {
-                        points.push(point);
-                    }
-                }
-            });
             
-            // Find the median point
-            midpoint = (maxPoint + minPoint)/2;
+            // Find the spatial median
+            midpoint = box.center().getComponent(splitAxis);
 
             // Split the box at the midpoint
             leftBox = new THREE.Box3(box.min.clone(),
@@ -804,8 +791,21 @@ BOTSIM.physics = (function () {
             rightFaces = findIntersectingFaces(rightBox, faces);
 
             // Recurse into each box
-            splitBox(leftBox, leftFaces);
-            splitBox(rightBox, rightFaces);
+            leftBoxes = splitBox(leftBox, leftFaces);
+            rightBoxes = splitBox(rightBox, rightFaces);
+
+            // If there's only one box in each branch and we can merge
+            // them, do so
+            if (leftBoxes.length === 1 &&
+                rightBoxes.length === 1 &&
+                leftBoxes[0].equals(leftBox) &&
+                rightBoxes[0].equals(rightBox)) {
+                return [box];
+            } else {
+                // Otherwise, we merge them and return the result
+                leftBoxes.push.apply(leftBoxes, rightBoxes);
+                return leftBoxes;
+            }
         }
 
         // Let's only try subdividing if there's thickness. This test
@@ -814,15 +814,15 @@ BOTSIM.physics = (function () {
             yScale !== 0 &&
             zScale !== 0) {
             // Build all candidate boxes recursively
-            splitBox(aabb, obj.physics.faces);
+            boxes = splitBox(aabb, obj.physics.faces);
         } else {
-            boxes.push(aabb);
+            boxes = [aabb];
         }
 
         
         // Help me with visualization
         boxes.forEach(function (box) {
-            var geom = new THREE.CubeGeometry(1.01, 1.01, 1.01),
+            var geom = new THREE.CubeGeometry(1, 1, 1),
                 mesh = new THREE.Mesh(geom,
                                       new THREE.MeshBasicMaterial({
                                           color: 0x888888,
