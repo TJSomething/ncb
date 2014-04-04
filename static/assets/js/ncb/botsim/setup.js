@@ -10,6 +10,10 @@ BOTSIM.FPS = 60;
 
 makePublisher(BOTSIM);
 
+BOTSIM.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
+    console.log(currentTask + ' (' + subtasksLeft + '/' + subtasksTotal + ')');
+};
+
 BOTSIM.initViewport = function () {
     var width, height, left, top;
 
@@ -46,6 +50,8 @@ BOTSIM.initViewport = function () {
     this.logicStats.domElement.style.left = '0px';
     this.logicStats.setMode(1);
     this.container.appendChild(this.logicStats.domElement);
+
+    console.log('Viewport initialized...');
 };
 
 BOTSIM.loadScene = function (files, character) {
@@ -187,16 +193,59 @@ BOTSIM.readyScene = function (character) {
     var app = this,
         // This is so we can do a few asynchronous tasks
         tasksLeft = 0,
+        maxTasks = 0,
         camera,
         robot,
         light;
 
     this.initViewport();
 
+    function addTask(task) {
+        tasksLeft += 1;
+        maxTasks += 1;
+
+        if (task !== undefined) {
+            setTimeout(function () {
+                task();
+                taskDone();
+            }, 0);
+        }
+    }
+
     function taskDone() {
         tasksLeft -= 1;
 
+        app.showProgress('Prepping objects', tasksLeft, maxTasks);
+
         if (tasksLeft === 0) {
+            // If we didn't add a camera or a robot, then place them in
+            //  reasonable locations
+            if (!app.robot) {
+                robot = new THREE.Object3D();
+                robot.position.set(0, 0, 0);
+                app.scene.add(robot);
+
+                initRobot(robot);
+            }
+
+            if (!app.camera) {
+                camera = new THREE.PerspectiveCamera( 45, app.ASPECT, 0.1, 1000 );
+                camera.position.set(5, 5, 5);
+                camera.lookAt(app.robot.position);
+                // This counters the hack used for Collada cameras
+                camera.rotateX(Math.PI/2);
+                app.scene.add(app.camera);
+
+                initCamera(camera);
+            }
+
+            // TODO: Only add lights if there are none
+            // Add some lights
+            app.scene.add(new THREE.AmbientLight( 0x222222 ));
+            light = new THREE.DirectionalLight(0xffffff, 0.7);
+            light.position.set(1, 5, 1);
+            app.scene.add(light);
+
             app.fire('scene-ready');
         }
     }
@@ -219,7 +268,7 @@ BOTSIM.readyScene = function (character) {
 
     function initRobot(obj) {
         if (obj.name === 'Robot' && !app.robot) {
-            tasksLeft += 1;
+            addTask();
 
             app.on('robot-ready', taskDone);
 
@@ -313,48 +362,21 @@ BOTSIM.readyScene = function (character) {
         }
     }
 
+    // Asynchronously prepares an object
     function initObject(obj) {
-        initCamera(obj);
-        initRobot(obj);
-        initPortable(obj);
-        addCollidable(obj);
-        fixTextures(obj);
+        addTask(function () {
+            initCamera(obj);
+            initRobot(obj);
+            initPortable(obj);
+            addCollidable(obj);
+            fixTextures(obj);
+        });
     }
 
-    tasksLeft += 1;
     // So that we have reasonable matrices for the children
     app.scene.updateMatrixWorld();
-    app.scene.traverse(initObject);
 
-    // If we didn't add a camera or a robot, then place them in
-    //  reasonable locations
-    if (!app.robot) {
-        robot = new THREE.Object3D();
-        robot.position.set(0, 0, 0);
-        app.scene.add(robot);
-
-        initRobot(robot);
-    }
-
-    if (!app.camera) {
-        camera = new THREE.PerspectiveCamera( 45, app.ASPECT, 0.1, 1000 );
-        camera.position.set(5, 5, 5);
-        camera.lookAt(app.robot.position);
-        // This counters the hack used for Collada cameras
-        camera.rotateX(Math.PI/2);
-        app.scene.add(app.camera);
-
-        initCamera(camera);
-    }
-
-    // TODO: Only add lights if there are none
-    // Add some lights
-    app.scene.add(new THREE.AmbientLight( 0x222222 ));
-    light = new THREE.DirectionalLight(0xffffff, 0.7);
-    light.position.set(1, 5, 1);
-    app.scene.add(light);
-
-    taskDone();
+    addTask(app.scene.traverse.bind(app.scene, initObject));
 };
 
 BOTSIM.startLoop = function () {
