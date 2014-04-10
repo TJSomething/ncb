@@ -733,6 +733,59 @@ BOTSIM.physics = (function () {
             });
         }
 
+        function mergeBoxes(leftBoxes, rightBoxes, axis) {
+            // We're going to combine the boxes across the given axis
+            // using a hashmap
+            var boxMap = Object.create(null),
+                boxes = [];
+
+            function addToMap(box) {
+                var nonAxisDimensions = [],
+                    i;
+
+                for (i = 0; i < 3; i += 1) {
+                    if (i !== axis) {
+                        nonAxisDimensions.push(box.min.getComponent(i));
+                        nonAxisDimensions.push(box.max.getComponent(i));
+                    }
+                }
+
+                // Convert to use as key
+                nonAxisDimensions = nonAxisDimensions.toString();
+
+                // Create entry if none exists
+                if (!boxMap[nonAxisDimensions]) {
+                    boxMap[nonAxisDimensions] = [box];
+                } else {
+                    // Otherwise, just add to the list of boxes with the
+                    // same dimensions
+                    boxMap[nonAxisDimensions].push(box);
+                }
+            }
+
+            function unionBoxes(boxes) {
+                return boxes.reduce(
+                    function (box1, box2) {
+                        return box1.union(box2);
+                    });
+            }
+
+            // Add them to the map
+            leftBoxes.forEach(addToMap);
+            rightBoxes.forEach(addToMap);
+
+            // Then, merge mergable boxes, if possible
+            for (var boxDimensions in boxMap) {
+                if (boxMap[boxDimensions].length === 1) {
+                    boxes.push(boxMap[boxDimensions][0]);
+                } else {
+                    boxes.push(unionBoxes(boxMap[boxDimensions]));
+                }
+            }
+
+            return boxes;
+        }
+
         function splitBox(box, faces) {
             var extent,
                 faceBox,
@@ -794,18 +847,7 @@ BOTSIM.physics = (function () {
             leftBoxes = splitBox(leftBox, leftFaces);
             rightBoxes = splitBox(rightBox, rightFaces);
 
-            // If there's only one box in each branch and we can merge
-            // them, do so
-            if (leftBoxes.length === 1 &&
-                rightBoxes.length === 1 &&
-                leftBoxes[0].equals(leftBox) &&
-                rightBoxes[0].equals(rightBox)) {
-                return [box];
-            } else {
-                // Otherwise, we merge them and return the result
-                leftBoxes.push.apply(leftBoxes, rightBoxes);
-                return leftBoxes;
-            }
+            return mergeBoxes(leftBoxes, rightBoxes, splitAxis);
         }
 
         // Let's only try subdividing if there's thickness. This test
