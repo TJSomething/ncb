@@ -23,7 +23,7 @@ BOTSIM.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
             message.innerHTML = currentTask;
         }, 0);
 
-        // If we're done, then hide the box after a half-second
+        // If we're done, then hide the box after a second
         if (subtasksLeft === 0) {
             setTimeout(function () {
                 box.style.display = 'none';
@@ -58,33 +58,16 @@ BOTSIM.initViewport = function () {
     // Stick the progress box in the center of the viewport
     progressBox = document.createElement('div');
     progressBox.id = 'botsim-progress-box';
-    progressBox.style.position = 'absolute';
-    progressBox.style.width = width/2 + 'px';
-    progressBox.style.height = height/4 + 'px';
-    progressBox.style.left = width/4 + 'px';
-    progressBox.style.top = 3*height/8 + 'px';
-    progressBox.style.background = '#eee';
-    progressBox.style.border = '2px solid';
-    progressBox.style.borderRadius = '10px';
     progressBox.innerHTML =
-        '<div style="padding: 10px; width: 100%; height: 50%">' +
+        '<div id="botsim-progress-padding">' +
             '<progress id="botsim-progress-bar" ' +
-                      'max="100" ' +
-                      'style="width: 100%; ' +
-                             'height: 100%; ' +
-                             'position: relative; ' +
-                             'left: 0px' +
-                             'top: 0px">' +
-            '</progress>' +
+                      'max="100"></progress>' +
         '</div>' +
-        '<div style="display: table; height: 50%; overflow: hidden; ' +
-                    'margin-left: auto; margin-right: auto; ' +
-                    'padding-bottom: 10px;">' +
-            '<div style="display: table-cell; vertical-align: middle;">' +
-                '<div id="botsim-progress-message"></div>' +
-            '</div>' +
-        '</div>';
+        '<div id="botsim-progress-message"></div>';
     this.container.appendChild(progressBox);
+    // Center it
+    progressBox.style.left = width/2 - progressBox.offsetWidth/2 + 'px';
+    progressBox.style.top = height/2 - progressBox.offsetHeight/2 + 'px';
 
     taskDone();
 
