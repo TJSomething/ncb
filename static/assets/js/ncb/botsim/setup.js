@@ -11,7 +11,12 @@ BOTSIM.FPS = 60;
 makePublisher(BOTSIM);
 
 BOTSIM.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
-    console.log(currentTask + ' (' + subtasksLeft + '/' + subtasksTotal + ')');
+    var messageNode = document.getElementById('botsim-messages'),
+        tasksDone = subtasksTotal - subtasksLeft;
+    setTimeout(function () {
+        messageNode.innerHTML =
+            currentTask + ' (' + tasksDone + '/' + subtasksTotal + ')';
+    }, 0);
 };
 
 BOTSIM.initViewport = function () {
@@ -210,6 +215,8 @@ BOTSIM.readyScene = function (character) {
                 taskDone();
             }, 0);
         }
+
+        app.showProgress('Prepping objects', tasksLeft, maxTasks);
     }
 
     function taskDone() {
