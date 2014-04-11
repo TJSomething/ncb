@@ -14,9 +14,17 @@ BOTSIM.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
     var messageNode = document.getElementById('botsim-messages'),
         tasksDone = subtasksTotal - subtasksLeft;
     setTimeout(function () {
+        messageNode.style.display = 'block';
         messageNode.innerHTML =
             currentTask + ' (' + tasksDone + '/' + subtasksTotal + ')';
     }, 0);
+
+    // If we're done, then hide the messages after a half-second
+    if (subtasksLeft === 0) {
+        setTimeout(function () {
+            messageNode.style.display = 'none';
+        }, 1000);
+    }
 };
 
 BOTSIM.initViewport = function () {
