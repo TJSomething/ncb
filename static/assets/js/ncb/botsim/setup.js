@@ -1,5 +1,5 @@
 /* jslint browser: true */
-/* global THREE, $:false, _:false, Stats, console, makePublisher */
+/* global THREE, $:false, _:false, Stats, console, makePublisher, async */
 
 'use strict';
 
@@ -11,33 +11,82 @@ BOTSIM.FPS = 60;
 makePublisher(BOTSIM);
 
 BOTSIM.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
-    var messageNode = document.getElementById('botsim-messages'),
+    var bar = document.getElementById('botsim-progress-bar'),
+        message = document.getElementById('botsim-progress-message'),
+        box = document.getElementById('botsim-progress-box'),
         tasksDone = subtasksTotal - subtasksLeft;
-    setTimeout(function () {
-        messageNode.style.display = 'block';
-        messageNode.innerHTML =
-            currentTask + ' (' + tasksDone + '/' + subtasksTotal + ')';
-    }, 0);
 
-    // If we're done, then hide the messages after a half-second
-    if (subtasksLeft === 0) {
+    if (bar) {
         setTimeout(function () {
-            messageNode.style.display = 'none';
-        }, 1000);
+            box.style.display = 'block';
+            bar.value = 100 * tasksDone / subtasksTotal;
+            message.innerHTML = currentTask;
+        }, 0);
+
+        // If we're done, then hide the box after a half-second
+        if (subtasksLeft === 0) {
+            setTimeout(function () {
+                box.style.display = 'none';
+            }, 1000);
+        }
     }
 };
 
 BOTSIM.initViewport = function () {
-    var width, height, left, top;
+    var width, height, left, top,
+        totalTasks = 6,
+        tasksLeft = totalTasks,
+        progressBox;
 
+    function taskDone() {
+        tasksLeft -= 1;
+        BOTSIM.showProgress('Initializing viewport', tasksLeft, totalTasks);
+    }
+
+    // Put the view pane in the right spot
     this.container = document.createElement('div');
     document.getElementById('botsim-body').appendChild(this.container);
     this.container.style.position = 'relative';
+
+    taskDone();
 
     width = this.container.offsetWidth;
     height = width / this.ASPECT;
     left = this.container.offsetLeft;
     top = this.container.offsetTop;
+
+    // Stick the progress box in the center of the viewport
+    progressBox = document.createElement('div');
+    progressBox.id = 'botsim-progress-box';
+    progressBox.style.position = 'absolute';
+    progressBox.style.width = width/2 + 'px';
+    progressBox.style.height = height/4 + 'px';
+    progressBox.style.left = width/4 + 'px';
+    progressBox.style.top = 3*height/8 + 'px';
+    progressBox.style.background = '#eee';
+    progressBox.style.border = '2px solid';
+    progressBox.style.borderRadius = '10px';
+    progressBox.innerHTML =
+        '<div style="padding: 10px; width: 100%; height: 50%">' +
+            '<progress id="botsim-progress-bar" ' +
+                      'max="100" ' +
+                      'style="width: 100%; ' +
+                             'height: 100%; ' +
+                             'position: relative; ' +
+                             'left: 0px' +
+                             'top: 0px">' +
+            '</progress>' +
+        '</div>' +
+        '<div style="display: table; height: 50%; overflow: hidden; ' +
+                    'margin-left: auto; margin-right: auto; ' +
+                    'padding-bottom: 10px;">' +
+            '<div style="display: table-cell; vertical-align: middle;">' +
+                '<div id="botsim-progress-message"></div>' +
+            '</div>' +
+        '</div>';
+    this.container.appendChild(progressBox);
+
+    taskDone();
 
     this.renderer = new THREE.WebGLRenderer({
         antialias: true,
@@ -48,6 +97,8 @@ BOTSIM.initViewport = function () {
     this.renderer.setClearColor('#87CEEB', 1);
 
     this.container.appendChild(this.renderer.domElement);
+
+    taskDone();
     
     // FPS indicators
     this.renderStats = new Stats();
@@ -56,6 +107,8 @@ BOTSIM.initViewport = function () {
     this.renderStats.domElement.style.left = '0px';
     this.renderStats.setMode(1);
     this.container.appendChild(this.renderStats.domElement);
+
+    taskDone();
     
     this.logicStats = new Stats();
     this.logicStats.domElement.style.position = 'absolute';
@@ -64,11 +117,12 @@ BOTSIM.initViewport = function () {
     this.logicStats.setMode(1);
     this.container.appendChild(this.logicStats.domElement);
 
-    console.log('Viewport initialized...');
+    taskDone();
 };
 
 BOTSIM.loadScene = function (files, character) {
     var tasksLeft = 0,
+        tasksTotal = 0,
         i,
         imageLibrary = {},
         sceneSource,
@@ -76,12 +130,20 @@ BOTSIM.loadScene = function (files, character) {
         app = this,
         fileType = 'dae';
 
+    function task(diff) {
+        tasksLeft += diff;
+        if (diff > 0) {
+            tasksTotal += diff;
+        }
+        BOTSIM.showProgress('Loading scene', tasksLeft, tasksTotal);
+    }
+
     function loadURL(url) {
         var xhr = new XMLHttpRequest();
 
         xhr.open('GET', url, true);
         xhr.responseType = 'blob';
-        tasksLeft += 1;
+        task(1);
 
         xhr.addEventListener('load', function () {
             if (xhr.status === 200) {
@@ -109,7 +171,7 @@ BOTSIM.loadScene = function (files, character) {
         }
 
         if (type.slice(0, 5) === 'image') {
-            tasksLeft += 1;
+            task(1);
 
             reader.onload = function (evt) {
                 imageLibrary[name] = evt.target.result;
@@ -118,7 +180,7 @@ BOTSIM.loadScene = function (files, character) {
 
             reader.readAsDataURL(file);
         } else if (name.slice(-3).toLowerCase() === 'dae') {
-            tasksLeft += 1;
+            task(1);
 
             fileType = 'dae';
 
@@ -129,7 +191,7 @@ BOTSIM.loadScene = function (files, character) {
 
             reader.readAsText(file);
         } else if (name.slice(-3).toLowerCase() === 'kmz') {
-            tasksLeft += 1;
+            task(1);
 
             fileType = 'kmz';
 
@@ -152,7 +214,7 @@ BOTSIM.loadScene = function (files, character) {
         // If we don't do this, the axes will be wrong
         loader.options.convertUpAxis = true;
 
-        tasksLeft -= 1;
+        task(-1);
 
         // Make sure it's ready
         if (tasksLeft <= 0) {
@@ -192,7 +254,7 @@ BOTSIM.loadScene = function (files, character) {
         }
     }
 
-    tasksLeft += 1;
+    task(1);
     // Load all the files
     for (i = 0; i < files.length; i += 1) {
         loadFile(files[i]);
@@ -209,7 +271,9 @@ BOTSIM.readyScene = function (character) {
         maxTasks = 0,
         camera,
         robot,
-        light;
+        light,
+        taskQueue = [],
+        startDate = Date.now();
 
     this.initViewport();
 
@@ -218,10 +282,10 @@ BOTSIM.readyScene = function (character) {
         maxTasks += 1;
 
         if (task !== undefined) {
-            setTimeout(function () {
+            taskQueue.push(function () {
                 task();
                 taskDone();
-            }, 0);
+            });
         }
 
         app.showProgress('Prepping objects', tasksLeft, maxTasks);
@@ -233,6 +297,7 @@ BOTSIM.readyScene = function (character) {
         app.showProgress('Prepping objects', tasksLeft, maxTasks);
 
         if (tasksLeft === 0) {
+            console.log(Date.now() - startDate);
             // If we didn't add a camera or a robot, then place them in
             //  reasonable locations
             if (!app.robot) {
@@ -262,6 +327,13 @@ BOTSIM.readyScene = function (character) {
             app.scene.add(light);
 
             app.fire('scene-ready');
+        }
+    }
+
+    function runTasks() {
+        taskQueue.shift().call();
+        if (taskQueue.length > 0) {
+            setTimeout(runTasks, 0);
         }
     }
 
@@ -392,6 +464,8 @@ BOTSIM.readyScene = function (character) {
     app.scene.updateMatrixWorld();
 
     addTask(app.scene.traverse.bind(app.scene, initObject));
+
+    setTimeout(runTasks, 0);
 };
 
 BOTSIM.startLoop = function () {
