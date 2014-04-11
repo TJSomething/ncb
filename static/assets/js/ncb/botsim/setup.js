@@ -272,8 +272,7 @@ BOTSIM.readyScene = function (character) {
         camera,
         robot,
         light,
-        taskQueue = [],
-        startDate = Date.now();
+        taskQueue = [];
 
     this.initViewport();
 
@@ -297,7 +296,6 @@ BOTSIM.readyScene = function (character) {
         app.showProgress('Prepping objects', tasksLeft, maxTasks);
 
         if (tasksLeft === 0) {
-            console.log(Date.now() - startDate);
             // If we didn't add a camera or a robot, then place them in
             //  reasonable locations
             if (!app.robot) {
