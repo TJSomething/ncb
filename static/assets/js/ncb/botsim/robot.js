@@ -181,6 +181,23 @@ BOTSIM.Robot = (function () {
                         Math.min(3*Math.PI/4, horiz));
             };
 
+            obj.getArmAngle = function (arm) {
+                var armObj;
+
+                // We're setting a specific arm
+                if (arm[0] === 'l' || arm[0] === 'L') {
+                    armObj = larm;
+                } else {
+                    armObj = rarm;
+                }
+
+                return {
+                    flexion: armObj.rotation.x,
+                    adduction: armObj.rotation.z,
+                    rotation: armObj.rotation.y
+                };
+            };
+
             obj.changeArmAngle = function (arm, horiz, vert, roll) {
                 var armObj;
 
@@ -382,6 +399,34 @@ BOTSIM.Robot = (function () {
                 // If the object is in arm's length, pick it up
                 if (closestDist < armLength * scale) {
                     this.pickUp(closestTarget);
+
+                    return true;
+                } else {
+                    return false;
+                }
+            };
+
+            // Picks up the object that's in the hand, if there is one
+            obj.pickUpAtHand = function (arm) {
+                var intersectingObj,
+                    i;
+
+                // Find an object that's intesecting with the hand
+                for (i = 0; i < obj.app.portables.length; i += 1) {
+                    if (checkHandCollision(arm, obj.app.portables[i])) {
+                        intersectingObj = obj.app.portables[i];
+                        break;
+                    }
+                }
+
+                if (intersectingObj !== undefined) {
+                    obj.grab(intersectingObj);
+
+                    if (arm[0] === 'l' || arm[0] === 'L') {
+                        leftHandObject = intersectingObj;
+                    } else {
+                        rightHandObject = intersectingObj;
+                    }
 
                     return true;
                 } else {

@@ -1,5 +1,5 @@
 /* jslint browser: true */
-/* global THREE: false */
+/* global THREE: false, mod: true */
 
 'use strict';
 
@@ -31,6 +31,10 @@ window.requestAnimationFrame = window.requestAnimationFrame ||
   });
 })(this);
 
+// A real modulo operator
+function mod(n, d) {
+    return n - (d * Math.floor(n / d));
+}
 
 // A nice implementation of the observer pattern from
 //  Javascript patterns by Stoyan Stefanov
