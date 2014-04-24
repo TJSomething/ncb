@@ -36,29 +36,31 @@ var sensors = null;
     };
 
     var ExtendedAction = function (action, params) {
-        var that = new Action(action, params);
+        Action.call(this, action, params);
 
-        runningActions[that.id] = that;
+        runningActions[this.id] = this;
 
-        return that;
+        return this;
     };
 
     // Sets a time period for the action to take place over
-    ExtendedAction.prototype.over = function (seconds) {
-        this.time = seconds;
-        return this;
-    };
+    ExtendedAction.prototype = {
+        over: function (seconds) {
+            this.time = seconds;
+            return this;
+        },
 
-    // Switch to a new state on the completion of this action
-    ExtendedAction.prototype.then = function (newState) {
-        this.newState = newState;
-        return this;
-    };
+        // Switch to a new state on the completion of this action
+        then: function (newState) {
+            this.newState = newState;
+            return this;
+        },
 
-    // Switch to a new state on the completion of this action
-    ExtendedAction.prototype.at = function (newState) {
-        this.newState = newState;
-        return this;
+        // Switch to a new state on the completion of this action
+        at: function (newState) {
+            this.newState = newState;
+            return this;
+        }
     };
 
     function rgb2hsv () {
@@ -352,8 +354,8 @@ self.addEventListener('message', function (oEvent) {
         // Make sensor data available
         sensors = oEvent.sensors;
         // Check if any of the current actions have completed
-        if (oEvent.actions.completed) {
-            oEvent.actions.completed.forEach(function (actionId) {
+        if (oEvent.actionsCompleted) {
+            oEvent.actionsCompleted.forEach(function (actionId) {
                 if (getAction(actionId)) {
                     // If the action has a state to set after it completes,
                     // then set that
@@ -370,9 +372,9 @@ self.addEventListener('message', function (oEvent) {
             // Prep a message to send back
             // Send over the newly queued actions
             reply.actions = newActions;
-            clearNewActions();
             // Send the message back
             postMessage(reply);
+            clearNewActions();
         } catch (e) {
             // If there was an error running their stuff, tell them
             reply.error = e.message;
