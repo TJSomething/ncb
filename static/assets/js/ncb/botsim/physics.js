@@ -1182,12 +1182,17 @@ BOTSIM.physics = (function () {
         }
     }
 
+    function setCollisionVolumeResolution(size) {
+        staticCollisionResolution = size;
+    }
+
     return {
             addObject: addObject,
             detectCollisions: detectCollisions,
             updateObjects: updateObjects,
             changeObjectState: changeObjectState,
             resolveCollisions: resolveCollisions,
-            toggleCollisionVolumes: toggleCollisionVolumes
+            toggleCollisionVolumes: toggleCollisionVolumes,
+            setCollisionVolumeResolution: setCollisionVolumeResolution
         };
 }());
