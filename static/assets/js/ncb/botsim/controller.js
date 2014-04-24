@@ -75,8 +75,7 @@ BOTSIM.controller = (function () {
 
     // Makes an object containing all "sensor" data
     function sense() {
-        var sensors = {},
-            armPose;
+        var sensors = {};
 
         if (capabilities.motion) {
             sensors.speed = robot.speed;
@@ -85,7 +84,6 @@ BOTSIM.controller = (function () {
             sensors.collision = robot.collisionResolution;
             // TODO: Add odometer
             sensors.odometer = robot.odometer;
-            // TODO: Add compass
             sensors.compass = mod(90 - (robot.rotation.y * 180 / Math.PI), 360);
         }
 
@@ -96,11 +94,11 @@ BOTSIM.controller = (function () {
         }
 
         if (capabilities.arms) {
-            armPose = robot.getArmAngle();
+            sensors.arms = {};
+            sensors.arms.left = robot.getArmAngle('l');
+            sensors.arms.right = robot.getArmAngle('r');
 
-            sensors.flexion = armPose.flexion;
-            sensors.adduction = armPose.adduction;
-            sensors.rotation = armPose.rotation;
+            // TODO: add arm velocities
         }
 
         if (capabilities.expressions) {
@@ -123,8 +121,8 @@ BOTSIM.controller = (function () {
      *       turn: function (angle) { robot.turn(angle); },
      *       jump: function () { robot.jump(); }
      *   }, { walk: 1.0, jump: true });
-     * 
-     * 
+     *
+     *
      * @param template the expected structure
      * @param obj the object being tested
      */
@@ -153,15 +151,39 @@ BOTSIM.controller = (function () {
             };
         }
 
-        if (capabilities.grab) {
+        if (capabilities.arms) {
             template.arms = {
-                //left: 
-                //TODO: finish this function!
+                left: {
+                    flex: function (speed) {
+                        robot.arms.left.flex = speed;
+                    },
+                    adduct: function (speed) {
+                        robot.arms.left.adduct = speed;
+                    },
+                    rotate: function (speed) {
+                        robot.arms.left.rotate = speed;
+                    }
+                },
+                right: {
+                    flex: function (speed) {
+                        robot.arms.right.flex = speed;
+                    },
+                    adduct: function (speed) {
+                        robot.arms.right.adduct = speed;
+                    },
+                    rotate: function (speed) {
+                        robot.arms.right.rotate = speed;
+                    }
+                }
             };
+        }
+
+        if (capabilities.grab) {
+            template.arms.left
         }
     }
 
-    // Decode and actuate with the actuation returned from the 
+    // Decode and actuate with the actuation returned from the
     // controller
     function actuate(robot, actuation) {
         // Leftovers from the last version of this
@@ -192,8 +214,28 @@ BOTSIM.controller = (function () {
         }*/
     }
 
+    function test() {
+        var sandbox = new Worker('assets/js/ncb/botsim/worker.js'),
+            exampleReq = new XMLHttpRequest();
+
+            exampleReq.addEventListener('load', function () {
+                console.log('loaded example');
+                sandbox.postMessage( { script: this.responseText, start: true } );
+            });
+            exampleReq.open('GET', 'assets/js/ncb/botsim/sample_script.js', true);
+
+            sandbox.addEventListener('message', function (e) {
+                console.log(e.data);
+            });
+
+            exampleReq.send();
+
+            return sandbox;
+    }
+
     return {
-        init: init
+        init: init,
+        test: test
     };
 }());
 
