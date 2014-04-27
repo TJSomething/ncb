@@ -3,6 +3,13 @@
 $().ready( function() {
     hidePages();
     $('#model').show();
+
+    $("#addElementModal").on("show.bs.modal", function() {
+        $("#elementType").change();
+        $("#modalneuronName").val("");
+        $("#modalcellGroupName").val("");
+        $("#modalcellGroupNum").val("");
+    });
 });
 
 // initialize main navigation
@@ -14,6 +21,7 @@ $().ready( function() {
         hidePages();
         target = $(this).attr('href');
         $(target).show();
+        simBuilderUpdateTargets();
     });
 });
 

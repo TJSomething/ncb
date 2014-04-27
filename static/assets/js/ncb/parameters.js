@@ -1,4 +1,15 @@
+function currentWorkingModel() {
+	this.name = "Current Model";
+	this.description = "";
+	this.neurons = [];
+	this.cellGroups = [];
+	this.cellAliases = [];
+	this.synapses = [];
+
+}
+
 function izhikevichParam() {
+	this.className = "izhikevichParam";
 	this.a = {type: "exact", value: 0.2, minValue: 0.0, maxValue: 0.0}; 		 //double
 	this.b = {type: "exact", value: 0.2, minValue: 0.0, maxValue: 0.0}; 		 //double
 	this.c = {type: "exact", value: -65.0, minValue: 0.0, maxValue: 0.0}; 		 //double
@@ -8,7 +19,8 @@ function izhikevichParam() {
 	this.threshold = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; //double
 }
 
-function ncsParam(channel) {
+function ncsParam() {
+	this.className = "ncsParam";
 	this.threshold = {type: "exact", value: 0.2, minValue: 0.0, maxValue: 0.0}; 				  //double
 	this.restingPotential = {type: "exact", value: 0.2, minValue: 0.0, maxValue: 0.0}; 			  //double
 	this.calcium = {type: "exact", value: -65.0, minValue: 0.0, maxValue: 0.0}; 				  //double
@@ -18,17 +30,20 @@ function ncsParam(channel) {
 	this.tauMembrane = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; 				  //double
 	this.rMembrane = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; 				  //double
 	this.spikeShape = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};			      //list of doubles
-	this.channel = channel;				  														  //list of parameters for channel
+	this.channel = [];				  														  //list of parameters for channel
 }
 
-function hodgkinHuxleyParam(channel) {
+function hodgkinHuxleyParam() {
+	this.className = "hodgkinHuxleyParam";
 	this.threshold = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};	    //double
 	this.restingPotential = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; //double
 	this.capacitence = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};		//double
-	this.channel = channel;																//list of parameters for channel
+	this.channel = [];																//list of parameters for channel
 }
 
 function voltageGatedIonChannel() {
+	this.className = "voltageGatedIonChannel";
+	this.name="Voltage Gated Ion Channel";
 	this.vHalf = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};			 //double
 	this.r = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};				 //double
 	this.activationSlope = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};	 //double
@@ -40,6 +55,8 @@ function voltageGatedIonChannel() {
 }
 
 function calciumDependantChannel() {
+	this.className = "calciumDependantChannel";
+	this.name="Calcium Dependant Channel";
 	this.mInitial = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};			 //double
 	this.reversalPotential = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; //double
 	this.backwardsRate = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};	 //double
@@ -49,12 +66,15 @@ function calciumDependantChannel() {
 }
 
 function voltageGatedChannel(particles) {
+	this.className = "voltageGatedChannel";
+	this.name="Voltage Gated Channel";
 	this.particles = particles;															//list of parameters for particles
 	this.conductance = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};		//double
 	this.reversePotential = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; //double
 }
 
 function voltageGatedParticle(alpha, beta) {
+	this.className = "voltageGatedParticle";
 	this.alpha = alpha;															//list of constants for alpha particle
 	this.beta = beta;															//list of constants for beta particle
 	this.power = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};	//double
@@ -70,12 +90,14 @@ function particleVariableConstants() {
 	this.h = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; //double
 }
 
-function flatConnection() {
+function flatSynapse() {
+	this.name = "flatSynapse";
 	this.delay = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0};   //integer
 	this.current = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; //double
 }
 
-function ncsConnection() {
+function ncsSynapse() {
+	this.name = "ncsSynapse"
 	this.utilization = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; 				  //double
 	this.redistribution = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; 			  //double
 	this.lastPrefireTime = {type: "exact", value: 30.0, minValue: 0.0, maxValue: 0.0}; 			  //double
@@ -102,6 +124,7 @@ function reportParameters() {
 }
 
 function modelParameters(name, type, parameters, dbType) {
+	this.className = "neuron";
 	this.name = name;
 	this.type = type;
 	this.parameters = parameters;
@@ -109,19 +132,24 @@ function modelParameters(name, type, parameters, dbType) {
 }
 
 function cellGroup(name, num, modelParameters, geometry) {
+	this.className = "cellGroup";
 	this.name = name;
 	this.num = num;
 	this.modelParameters = modelParameters;
 	this.geometry = geometry;
-	this.subGroup = subGroup; //temporary becasue I dont know how cellAliases work with cellgroups. What is the point of aliases when you can put subgroups in cellgroups?
+	this.cellGroups = [];
+	//this.subGroup = subGroup;
 }
 
-function cellAlias(cellGroup, cellAlias) {
+function cellAlias(name, cellGroup, cellAlias) {
+	this.className = "cellAlias";
+	this.name = name;
 	this.cellGroup = cellGroup;
 	this.cellAlias = cellAlias;
 }
 
-function connectionGroup(name, pre, post, prob, parameters) {
+function synapseGroup(name, pre, post, prob, parameters) {
+	this.className = "synapseGroup"
 	this.name = name;
 	this.pre = pre;
 	this.post = post;
@@ -129,9 +157,9 @@ function connectionGroup(name, pre, post, prob, parameters) {
 	this.parameters = parameters;
 }
 
-function connectionAlias(connectionGroup, connectionAlias) {
-	this.connectionGroup = connectionGroup;
-	this.connectionAlias = connectionAlias;
+function synapseAlias(synapseGroup, synapseAlias) {
+	this.synapseGroup = synapseGroup;
+	this.synapseAlias = synapseAlias;
 }
 
 function inputGroup() {

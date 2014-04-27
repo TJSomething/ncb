@@ -1,0 +1,4 @@
+# ignore upload folder
+uploads/
+exports/
+#temp.json
