@@ -1,11 +1,11 @@
 /* jslint browser: true */
-/* global THREE, $:false, _:false, Stats, console, BOTSIM: true */
+/* global THREE, $:false, _:false, Stats, console, VBOT: true */
 
 'use strict';
 
-var BOTSIM = BOTSIM || {};
+var VBOT = VBOT || {};
 
-BOTSIM.physics = (function () {
+VBOT.physics = (function () {
     var staticObjects = [],
         dynamicObjects = [],
         // This is used to quickly address objects
@@ -1176,9 +1176,9 @@ BOTSIM.physics = (function () {
 
     function toggleCollisionVolumes() {
         if (collisionVolumeObjects.parent) {
-            BOTSIM.scene.remove(collisionVolumeObjects);
+            VBOT.scene.remove(collisionVolumeObjects);
         } else {
-            BOTSIM.scene.add(collisionVolumeObjects);
+            VBOT.scene.add(collisionVolumeObjects);
         }
     }
 

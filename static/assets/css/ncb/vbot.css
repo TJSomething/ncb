@@ -1,4 +1,4 @@
-#botsim-progress-box {
+#vbot-progress-box {
 	position: absolute;
 	width: 50%;
 	background: #FFF;
@@ -7,12 +7,12 @@
 	border-radius: 4px;
 }
 
-#botsim-progress-padding {
+#vbot-progress-padding {
 	padding: 10px;
 	width: 100%;
 }
 
-#botsim-progress-bar {
+#vbot-progress-bar {
 	width: 100%;
     height: 2em;
     position: relative;
@@ -20,7 +20,7 @@
     top: 0px;
 }
 
-#botsim-progress-message {
+#vbot-progress-message {
 	display: table;
 	margin: 0px auto 10px auto;
 }

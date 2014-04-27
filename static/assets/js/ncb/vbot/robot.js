@@ -1,11 +1,11 @@
 /* jslint browser: true */
-/* global THREE, _:false, console, BOTSIM: true */
+/* global THREE, _:false, console, VBOT: true */
 
 'use strict';
 
-var BOTSIM = BOTSIM || {};
+var VBOT = VBOT || {};
 
-BOTSIM.Robot = (function () {
+VBOT.Robot = (function () {
     function loadSteve(obj) {
         var loader = new THREE.JSONLoader(true);
         loader.load('assets/json/steve.js', function (geometry, materials) {
@@ -526,8 +526,8 @@ BOTSIM.Robot = (function () {
         var that = this;
 
         // Allow usage of new
-        if (!(this instanceof BOTSIM.Robot)) {
-            return new BOTSIM.Robot(obj, robotType);
+        if (!(this instanceof VBOT.Robot)) {
+            return new VBOT.Robot(obj, robotType);
         }
 
         // Clear the dummy geometry used to stand in for

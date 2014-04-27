@@ -3,17 +3,17 @@
 
 'use strict';
 
-var BOTSIM = BOTSIM ||  {};
+var VBOT = VBOT ||  {};
 
-BOTSIM.ASPECT = 16 / 9;
-BOTSIM.FPS = 60;
+VBOT.ASPECT = 16 / 9;
+VBOT.FPS = 60;
 
-makePublisher(BOTSIM);
+makePublisher(VBOT);
 
-BOTSIM.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
-    var bar = document.getElementById('botsim-progress-bar'),
-        message = document.getElementById('botsim-progress-message'),
-        box = document.getElementById('botsim-progress-box'),
+VBOT.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
+    var bar = document.getElementById('vbot-progress-bar'),
+        message = document.getElementById('vbot-progress-message'),
+        box = document.getElementById('vbot-progress-box'),
         tasksDone = subtasksTotal - subtasksLeft;
 
     if (bar) {
@@ -32,7 +32,7 @@ BOTSIM.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
     }
 };
 
-BOTSIM.initViewport = function () {
+VBOT.initViewport = function () {
     var width, height, left, top,
         totalTasks = 6,
         tasksLeft = totalTasks,
@@ -40,12 +40,12 @@ BOTSIM.initViewport = function () {
 
     function taskDone() {
         tasksLeft -= 1;
-        BOTSIM.showProgress('Initializing viewport', tasksLeft, totalTasks);
+        VBOT.showProgress('Initializing viewport', tasksLeft, totalTasks);
     }
 
     // Put the view pane in the right spot
     this.container = document.createElement('div');
-    document.getElementById('botsim-body').appendChild(this.container);
+    document.getElementById('vbot-body').appendChild(this.container);
     this.container.style.position = 'relative';
 
     taskDone();
@@ -57,13 +57,13 @@ BOTSIM.initViewport = function () {
 
     // Stick the progress box in the center of the viewport
     progressBox = document.createElement('div');
-    progressBox.id = 'botsim-progress-box';
+    progressBox.id = 'vbot-progress-box';
     progressBox.innerHTML =
-        '<div id="botsim-progress-padding">' +
-            '<progress id="botsim-progress-bar" ' +
+        '<div id="vbot-progress-padding">' +
+            '<progress id="vbot-progress-bar" ' +
                       'max="100"></progress>' +
         '</div>' +
-        '<div id="botsim-progress-message"></div>';
+        '<div id="vbot-progress-message"></div>';
     this.container.appendChild(progressBox);
     // Center it
     progressBox.style.left = width/2 - progressBox.offsetWidth/2 + 'px';
@@ -103,7 +103,7 @@ BOTSIM.initViewport = function () {
     taskDone();
 };
 
-BOTSIM.loadScene = function (files, character) {
+VBOT.loadScene = function (files, character) {
     var tasksLeft = 0,
         tasksTotal = 0,
         i,
@@ -118,7 +118,7 @@ BOTSIM.loadScene = function (files, character) {
         if (diff > 0) {
             tasksTotal += diff;
         }
-        BOTSIM.showProgress('Loading scene', tasksLeft, tasksTotal);
+        VBOT.showProgress('Loading scene', tasksLeft, tasksTotal);
     }
 
     function loadURL(url) {
@@ -247,7 +247,7 @@ BOTSIM.loadScene = function (files, character) {
 
 // This grabs and modifies objects in the scene that are important so that
 //  the simulation can use them.
-BOTSIM.readyScene = function (character) {
+VBOT.readyScene = function (character) {
     var app = this,
         // This is so we can do a few asynchronous tasks
         tasksLeft = 0,
@@ -341,7 +341,7 @@ BOTSIM.readyScene = function (character) {
             app.on('robot-ready', taskDone);
 
             // Set up our robot
-            app.robot = new BOTSIM.Robot(obj, character, app);
+            app.robot = new VBOT.Robot(obj, character, app);
         }
     }
 
@@ -449,7 +449,7 @@ BOTSIM.readyScene = function (character) {
     setTimeout(runTasks, 0);
 };
 
-BOTSIM.startLoop = function () {
+VBOT.startLoop = function () {
     var that = this,
         width = this.container.offsetWidth,
         height = this.container.offsetHeight,
@@ -481,16 +481,16 @@ BOTSIM.startLoop = function () {
 
                             arraySize = rows * cols * 4;
 
-                            BOTSIM.cameraData = new Uint8Array(arraySize);
+                            VBOT.cameraData = new Uint8Array(arraySize);
 
-                            intView = new Uint32Array(BOTSIM.cameraData.buffer);
+                            intView = new Uint32Array(VBOT.cameraData.buffer);
 
                             tempRow = new Uint32Array(cols);
                         }
 
                         gl.readPixels(this.left, this.bottom,
                             this.width, this.height, gl.RGBA,
-                            gl.UNSIGNED_BYTE, BOTSIM.cameraData);
+                            gl.UNSIGNED_BYTE, VBOT.cameraData);
 
                         // Flip the image data
                         for (i = 0; i < rows / 2; i += 1) {
@@ -571,25 +571,25 @@ BOTSIM.startLoop = function () {
     }());
 };
 
-BOTSIM.on('scene-loaded', 'readyScene', BOTSIM);
+VBOT.on('scene-loaded', 'readyScene', VBOT);
 
-BOTSIM.on('scene-ready', 'startLoop', BOTSIM);
+VBOT.on('scene-ready', 'startLoop', VBOT);
 
-BOTSIM.on('logic-tick', function (dt) {
+VBOT.on('logic-tick', function (dt) {
     this.controls.update(60 * dt);
-}, BOTSIM);
+}, VBOT);
 
-BOTSIM.on('physics-tick', function (dt) {
-    BOTSIM.physics.updateObjects(dt);
-    BOTSIM.physics.detectCollisions();
-    BOTSIM.physics.resolveCollisions(dt);
+VBOT.on('physics-tick', function (dt) {
+    VBOT.physics.updateObjects(dt);
+    VBOT.physics.detectCollisions();
+    VBOT.physics.resolveCollisions(dt);
 });
 
-BOTSIM.on('render', (function () {
+VBOT.on('render', (function () {
     var canvas = document.createElement('canvas'),
         ctx = canvas.getContext('2d'),
         dpr = window.devicePixelRatio || 1,
-        container = document.getElementById('botsim-body'),
+        container = document.getElementById('vbot-body'),
         imageData;
 
     // This might be needed for a demo, but probably not
@@ -602,8 +602,8 @@ BOTSIM.on('render', (function () {
             imageData = ctx.createImageData(canvas.width, canvas.height);
         }
 
-        imageData.data.set(BOTSIM.cameraData);
+        imageData.data.set(VBOT.cameraData);
         ctx.putImageData(imageData, 0, 0);
         ctx.scale(1, -1);
     };
-}()), BOTSIM);
+}()), VBOT);

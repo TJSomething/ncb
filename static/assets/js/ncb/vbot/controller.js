@@ -3,15 +3,15 @@
 
 'use strict';
 
-var BOTSIM = BOTSIM ||  {};
+var VBOT = VBOT ||  {};
 
 // Note that this depends on the the robot being loaded
-BOTSIM.controller = (function () {
+VBOT.controller = (function () {
     var capabilities,
         robot;
 
     function init() {
-        robot = BOTSIM.robot;
+        robot = VBOT.robot;
         capabilities = getCapabilities();
     }
 
@@ -215,14 +215,14 @@ BOTSIM.controller = (function () {
     }
 
     function test() {
-        var sandbox = new Worker('assets/js/ncb/botsim/worker.js'),
+        var sandbox = new Worker('assets/js/ncb/vbot/worker.js'),
             exampleReq = new XMLHttpRequest();
 
             exampleReq.addEventListener('load', function () {
                 console.log('loaded example');
                 sandbox.postMessage( { script: this.responseText, start: true } );
             });
-            exampleReq.open('GET', 'assets/js/ncb/botsim/sample_script.js', true);
+            exampleReq.open('GET', 'assets/js/ncb/vbot/sample_script.js', true);
 
             sandbox.addEventListener('message', function (e) {
                 console.log(e.data);
