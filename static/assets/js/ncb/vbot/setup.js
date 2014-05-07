@@ -555,7 +555,7 @@ VBOT.startLoop = function () {
                     // If we have an especially long frame
                     if (dt > 0.1) {
                         // We're going to pretend that it was short
-                        dt = tickLength;
+                        dt = 0.1;
                         // And reset the accumulator
                         accumulator = 0;
                     } else {

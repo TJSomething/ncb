@@ -43,9 +43,14 @@ var sensors = null;
         return this;
     };
 
-    // Sets a time period for the action to take place over
     ExtendedAction.prototype = {
+        // Sets a time period for the action to take place over
         over: function (seconds) {
+            // This conflicts with at, so whatever happens last
+            // will take precedence
+            if (this.speed !== undefined) {
+                delete this.speed;
+            }
             this.time = seconds;
             return this;
         },
@@ -56,9 +61,14 @@ var sensors = null;
             return this;
         },
 
-        // Switch to a new state on the completion of this action
-        at: function (newState) {
-            this.newState = newState;
+        // Sets a speed for the action to be performed at
+        at: function (speed) {
+            // This conflicts with over, so whatever happens last
+            // will take precedence
+            if (this.time !== undefined) {
+                delete this.time;
+            }
+            this.speed = newState;
             return this;
         }
     };
@@ -344,7 +354,7 @@ self.addEventListener('message', function (oEvent) {
         // Load up the script as a state machine
         try {
             loadScript(oEvent.data.script);
-            postMessage('worker loaded script');
+            postMessage({loaded: true});
         } catch (e) {
             // If there's an error in their script, send them a message
             reply.error = e.message;
@@ -354,8 +364,8 @@ self.addEventListener('message', function (oEvent) {
         // Make sensor data available
         sensors = oEvent.sensors;
         // Check if any of the current actions have completed
-        if (oEvent.actionsCompleted) {
-            oEvent.actionsCompleted.forEach(function (actionId) {
+        if (oEvent.data.actionsCompleted) {
+            oEvent.data.actionsCompleted.forEach(function (actionId) {
                 if (getAction(actionId)) {
                     // If the action has a state to set after it completes,
                     // then set that

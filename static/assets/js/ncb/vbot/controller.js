@@ -8,7 +8,9 @@ var VBOT = VBOT ||  {};
 // Note that this depends on the the robot being loaded
 VBOT.controller = (function () {
     var capabilities,
-        robot;
+        robot,
+        actionQueue,
+        worker;
 
     function init() {
         robot = VBOT.robot;
@@ -107,6 +109,8 @@ VBOT.controller = (function () {
 
         // TODO: add vision
 
+        sensors.collision = detectCollisions();
+
         return sensors;
     }
 
@@ -183,59 +187,99 @@ VBOT.controller = (function () {
         }
     }
 
-    // Decode and actuate with the actuation returned from the
-    // controller
-    function actuate(robot, actuation) {
-        // Leftovers from the last version of this
-        /*if (capabilities.motion) {
-            if (actuation.speed !== undefined) {
-                robot.speed = actuation.speed;
-            }
-
-            if (actuation.angularVelocity !== undefined) {
-                robot.angularVelocity = actuation.angularVelocity;
-            }
-        }
-
-        if (capabilities.grab) {
-            if (actuation.grab !== undefined) {
-                robot.pickUpAtHand(actuation.grab.arm);
-            }
-        }
-
-        if (capabilities.arms) {
-            if (actuation.arms) {
-                if (actuation.arms.left) {
-                    if (actuation.arms.left.flex) {
-                        robot.arms.left.flex = actuation.arms.left.flex;
-                    }
-                }
-            }
-        }*/
-    }
-
     function test() {
         var sandbox = new Worker('assets/js/ncb/vbot/worker.js'),
             exampleReq = new XMLHttpRequest();
 
-            exampleReq.addEventListener('load', function () {
-                console.log('loaded example');
-                sandbox.postMessage( { script: this.responseText, start: true } );
-            });
-            exampleReq.open('GET', 'assets/js/ncb/vbot/sample_script.js', true);
+        exampleReq.addEventListener('load', function () {
+            console.log('loaded example');
+            sandbox.postMessage( { script: this.responseText, start: true } );
+        });
+        exampleReq.open('GET', 'assets/js/ncb/vbot/sample_script.js', true);
 
-            sandbox.addEventListener('message', function (e) {
-                console.log(e.data);
-            });
+        function start(e) {
+            console.log(e.data);
 
-            exampleReq.send();
+            sandbox.removeEventListener('message', start, false);
+            sandbox.addEventListener('actuate', actuate, false);
+        }
 
-            return sandbox;
+        sandbox.addEventListener('message', start, false);
+
+        exampleReq.send();
+
+        worker = sandbox;
+
+        return sandbox;
+    }
+
+    function step(dt) {
+        worker.postMessage({
+            sensors: {},
+            actionsCompleted: []
+        });
+    }
+
+    function actuate(e) {
+        console.log(e);
+    }
+
+    function detectCollisions() {
+        var collisions = {
+                front: false,
+                back: false,
+                left: false,
+                right: false,
+                top: false,
+                bottom: false
+            };
+
+        function setCollision(collision) {
+            var axis,
+                maxAxis,
+                maxAxisLength = -Infinity,
+                normal = collision.contactNormal.clone();
+
+            normal.transformDirection(VBOT.robot.matrixWorld);
+
+            for (axis = 0; axis < 3; axis += 1) {
+                if (Math.abs(normal.getComponent(axis)) >
+                        maxAxisLength) {
+                    maxAxis = axis;
+                    maxAxisLength = Math.abs(
+                        normal.getComponent(axis));
+                }
+            }
+
+            if (maxAxis === 0) {
+                if (normal.x > 0) {
+                    collisions.right = true;
+                } else {
+                    collisions.left = true;
+                }
+            } else if (maxAxis === 1) {
+                if (normal.y > 0) {
+                    collisions.bottom = true;
+                } else {
+                    collisions.top = true;
+                }
+            } else if (maxAxis === 2) {
+                if (normal.z > 0) {
+                    collisions.front = true;
+                } else {
+                    collisions.back = true;
+                }
+            }
+        }
+
+        VBOT.robot.collisions.forEach(setCollision);
+
+        return collisions;
     }
 
     return {
         init: init,
-        test: test
+        test: test,
+        step: step
     };
 }());
-
