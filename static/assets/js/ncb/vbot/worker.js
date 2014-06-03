@@ -362,7 +362,7 @@ self.addEventListener('message', function (oEvent) {
         }
     } else if (oEvent.data.sensors) {
         // Make sensor data available
-        sensors = oEvent.sensors;
+        sensors = oEvent.data.sensors;
         // Check if any of the current actions have completed
         if (oEvent.data.actionsCompleted) {
             oEvent.data.actionsCompleted.forEach(function (actionId) {
@@ -382,6 +382,9 @@ self.addEventListener('message', function (oEvent) {
             // Prep a message to send back
             // Send over the newly queued actions
             reply.actions = newActions;
+            // We actually end up threading the time interval into our
+            // actuation call
+            reply.step = oEvent.data.step;
             // Send the message back
             postMessage(reply);
             clearNewActions();

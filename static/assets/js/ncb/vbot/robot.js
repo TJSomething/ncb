@@ -233,7 +233,7 @@ VBOT.Robot = (function () {
                 this.changeArmAngle(arm, 0, 0, -amount);
             };
 
-            obj.pointArm = function (arm, target, duration) {
+            obj.pointArm = function (arm, target, duration, callback) {
                 var targetBox = new THREE.Box3().setFromObject(target),
                     targetCenter = new THREE.Vector3();
 
@@ -247,6 +247,10 @@ VBOT.Robot = (function () {
                 } else {
                     rightMotionRemaining = duration;
                     rightPointTarget = targetCenter;
+                }
+                
+                if (callback !== undefined) {
+                    callback();
                 }
             };
 

@@ -1,5 +1,5 @@
 function start () {
-    turnTowards('portable-table').then('goToTable');
+    turnTowards('portable_table').then('goToTable');
     next('wait');
 }
 
@@ -13,12 +13,13 @@ function goToTable () {
 function goingToTable () {
     // Check if we've hit anything yet
     if (sensors.collision.front === true) {
+        setSpeed(0.0);
         next('pointToTable');
     }
 }
 
 function pointToTable () {
-    pointRightArmAt('portable-table').then('grabTable');
+    pointRightArmAt('portable_table').then('grabTable');
     next('wait');
 }
 
@@ -28,7 +29,7 @@ function grabTable () {
 }
 
 function didWeGrabTheTable () {
-    if (sensors.arms.right.held === 'portable-table') {
+    if (sensors.arms.right.held === 'portable_table') {
         // If we have the table, then let's raise it to the sky,
         // smile, then search for the road
         pointRightArm(0.0, 1.0, 0.0). // Point arm up

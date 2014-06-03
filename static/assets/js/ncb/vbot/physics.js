@@ -12,7 +12,7 @@ VBOT.physics = (function () {
         dynamicObjectIndices = {},
         staticObjectIndices = {},
         EPSILON = 0.000001,
-        staticCollisionResolution = 1,
+        staticCollisionResolution = 0.1,
         collisionVolumeObjects = new THREE.Object3D();
 
     function initDynamicObject(obj) {

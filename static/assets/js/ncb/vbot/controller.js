@@ -9,8 +9,9 @@ var VBOT = VBOT ||  {};
 VBOT.controller = (function () {
     var capabilities,
         robot,
-        actionQueue,
-        worker;
+        actionQueue = [],
+        worker,
+        actionsCompleted = [];
 
     function init() {
         robot = VBOT.robot;
@@ -26,7 +27,7 @@ VBOT.controller = (function () {
 
     // We need the robots capabilities
     function getCapabilities() {
-        var capabilities = [];
+        var capabilities = {};
 
         // 2d motion
         if (methodTest(robot, [
@@ -35,8 +36,7 @@ VBOT.controller = (function () {
                 'instantLeft',
                 'instantRight',
                 'simultaneousTurnMove',
-                'move',
-                'getCollisionVector'
+                'move'
             ])) {
             capabilities.motion = true;
         }
@@ -73,6 +73,8 @@ VBOT.controller = (function () {
             ])) {
             capabilities.expressions = true;
         }
+        
+        return capabilities;
     }
 
     // Makes an object containing all "sensor" data
@@ -82,17 +84,15 @@ VBOT.controller = (function () {
         if (capabilities.motion) {
             sensors.speed = robot.speed;
             sensors.angularVelocity = robot.angularVelocity;
-            // TODO: Add collision resolution to robot
-            sensors.collision = robot.collisionResolution;
             // TODO: Add odometer
-            sensors.odometer = robot.odometer;
+            //sensors.odometer = robot.odometer;
             sensors.compass = mod(90 - (robot.rotation.y * 180 / Math.PI), 360);
         }
 
         if (capabilities.pickUp) {
             // TODO: Make held objects public
-            sensors.leftHandObject = robot.leftHandObject.name;
-            sensors.rightHandObject = robot.rightHandObject.name;
+            //sensors.leftHandObject = robot.leftHandObject.name;
+            //sensors.rightHandObject = robot.rightHandObject.name;
         }
 
         if (capabilities.arms) {
@@ -190,6 +190,8 @@ VBOT.controller = (function () {
     function test() {
         var sandbox = new Worker('assets/js/ncb/vbot/worker.js'),
             exampleReq = new XMLHttpRequest();
+        
+        init();
 
         exampleReq.addEventListener('load', function () {
             console.log('loaded example');
@@ -201,7 +203,7 @@ VBOT.controller = (function () {
             console.log(e.data);
 
             sandbox.removeEventListener('message', start, false);
-            sandbox.addEventListener('actuate', actuate, false);
+            sandbox.addEventListener('message', actuate, false);
         }
 
         sandbox.addEventListener('message', start, false);
@@ -212,16 +214,95 @@ VBOT.controller = (function () {
 
         return sandbox;
     }
-
-    function step(dt) {
-        worker.postMessage({
-            sensors: {},
-            actionsCompleted: []
+    
+    function removeCompletedAction(actionId) {
+        actionQueue = actionQueue.filter(function (action) {
+            return action.id !== actionId;
         });
     }
 
+    function step(dt) {
+        if (worker !== undefined) {
+            // Delete all the completed actions from the action queue
+            actionsCompleted.forEach(removeCompletedAction);
+
+            worker.postMessage({
+                sensors: sense(),
+                actionsCompleted: actionsCompleted,
+                step: dt
+            });
+
+            // Clear completed actions
+            actionsCompleted = [];
+        }
+    }
+
     function actuate(e) {
-        console.log(e);
+        console.log(e.data);
+        if (e.data !== undefined &&
+            e.data.hasOwnProperty('step')) {
+            var step = e.data.step;
+
+            if (e.data.actions) {
+                actionQueue = actionQueue.concat(e.data.actions);
+            }
+
+            actionQueue.forEach(function (action) {
+                stepAction(action, e.data.step);
+            });
+        }
+    }
+
+    function stepAction(action, dt) {
+        var remainingAngle,
+            targetLoc,
+            target,
+            stepAngle;
+
+        // If the action has no speed or duration, then let's just set the
+        // speed to 1
+        if (!action.hasOwnProperty('speed') &&
+            !action.hasOwnProperty('time')) {
+            action.speed = 1;
+        }
+
+        switch (action.action) {
+            case 'turnTowards':
+                // Calculate how much to turn
+                target = VBOT.scene.getObjectByName(action.objName, true);
+                // Target location in local space
+                targetLoc = VBOT.robot.worldToLocal(
+                    target.positionWorld());
+                remainingAngle = Math.atan2(targetLoc.x, targetLoc.z);
+                // Calculate how much we need to turn
+                if (action.hasOwnProperty('speed')) {
+                    stepAngle = action.speed * dt * Math.sign(remainingAngle);
+                } else if (action.hasOwnProperty('timeLeft')) {
+                    stepAngle = remainingAngle * dt / action.timeLeft;
+                    action.timeLeft -= dt;
+                } else if (action.hasOwnProperty('time')) {
+                    stepAngle = remainingAngle * dt / action.time;
+                    action.timeLeft = action.time - dt;
+                } else {
+                    throw "Logic error in turnTowards";
+                }
+                // Make sure that we don't over turn
+                if (Math.sign(remainingAngle - stepAngle) !== 
+                    Math.sign(remainingAngle)) {
+                    stepAngle = remainingAngle;
+                }
+                // Turn it
+                VBOT.robot.rotateY(stepAngle);
+                // If we're done, note that
+                if (remainingAngle - stepAngle === 0) {
+                    actionsCompleted.push(action.id);
+                }
+                break;
+            case 'setSpeed':
+                VBOT.robot.speed = action.speed;
+                actionsCompleted.push(action.id);
+                break;
+        }
     }
 
     function detectCollisions() {

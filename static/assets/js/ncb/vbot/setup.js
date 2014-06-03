@@ -583,6 +583,7 @@ VBOT.on('physics-tick', function (dt) {
     VBOT.physics.updateObjects(dt);
     VBOT.physics.detectCollisions();
     VBOT.physics.resolveCollisions(dt);
+    VBOT.controller.step(dt);
 });
 
 VBOT.on('render', (function () {
