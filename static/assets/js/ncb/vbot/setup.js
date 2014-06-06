@@ -37,7 +37,7 @@ VBOT.initViewport = function () {
         totalTasks = 6,
         tasksLeft = totalTasks,
         progressBox;
-
+    
     function taskDone() {
         tasksLeft -= 1;
         VBOT.showProgress('Initializing viewport', tasksLeft, totalTasks);

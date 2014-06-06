@@ -175,10 +175,10 @@ VBOT.Robot = (function () {
                 armObj.rotation.x = vert;
                 // We need to clamp motion to force motion to be
                 //  relatively realistic
-                armObj.rotation.y = Math.max(-Math.PI/2,
+                /*armObj.rotation.y = Math.max(-Math.PI/2,
                     Math.min(Math.PI, roll));
                 armObj.rotation.z = Math.max(-Math.PI/4,
-                        Math.min(3*Math.PI/4, horiz));
+                        Math.min(3*Math.PI/4, horiz));*/
             };
 
             obj.getArmAngle = function (arm) {
@@ -211,14 +211,14 @@ VBOT.Robot = (function () {
                 armObj.rotation.x = armObj.rotation.x + vert;
                 // We need to clamp motion to force motion to be
                 //  relatively realistic
-                armObj.rotation.y =
+                /*armObj.rotation.y =
                     Math.max(-Math.PI/2,
                         Math.min(Math.PI,
                             armObj.rotation.y + roll));
                 armObj.rotation.z =
                     Math.max(-Math.PI/4,
                         Math.min(3*Math.PI/4,
-                            armObj.rotation.z + horiz));
+                            armObj.rotation.z + horiz));*/
             };
 
             obj.flexShoulder = function (arm, amount) {
@@ -248,10 +248,77 @@ VBOT.Robot = (function () {
                     rightMotionRemaining = duration;
                     rightPointTarget = targetCenter;
                 }
+            };
+            
+            /**
+             * Points an arm at a target vector, oriented with an up vector
+             *
+             * @param targetVector THREE.Vector3 where the arm should point
+             * @param upVector THREE.Vector3 the direction the top of the arm
+             * @param isGlobal boolean whether targetVector is local or global
+             */
+            obj.instantPointArm = function (arm, targetVector, isGlobal, upVector) {
+                var isLeft = arm[0] === 'l' || arm[0] === 'L',
+                    armObj = isLeft ? larm : rarm,
+                    localMatrix = new THREE.Matrix4(),
+                    shoulderLoc = armObj.positionWorld(),
+                    shoulderDisplacement = shoulderLoc.clone().sub(obj.positionWorld()),
+                    direction = new THREE.Vector3(0, -1, 0),
+                    thirdBasis = new THREE.Vector3(),
+                    rotMatrix;
                 
-                if (callback !== undefined) {
-                    callback();
+                // Don't want to mangle the formal parameters
+                targetVector = targetVector.clone();
+                
+                localMatrix.getInverse(obj.matrixWorld);
+                
+                // isGlobal defaults to false
+                if (isGlobal === undefined) {
+                    isGlobal = false;
                 }
+                
+                // I've found that you get the most intuitive motion if you
+                // have up be up and out for the arm
+                if (upVector === undefined) {
+                    upVector = new THREE.Vector3(isLeft ? -1 : 1,
+                        isLeft ? 1 : -1, 0);
+                } else {
+                    upVector = upVector.clone();
+                }
+                
+                // Convert the targetVector into local space, if needed
+                if (isGlobal) {
+                    targetVector.
+                        applyMatrix4(localMatrix).
+                        sub(shoulderDisplacement);
+                }
+                targetVector.
+                    multiplyScalar(-1);
+                
+                targetVector.normalize();
+                upVector.normalize();
+                
+                // For a rotation we need three bases
+                thirdBasis.crossVectors(targetVector, upVector).
+                    normalize();
+                
+                // Also, force the up vector to be perpendicular to the target
+                // vector
+                upVector.crossVectors(targetVector, thirdBasis).
+                    normalize();
+                
+                // Make a rotation matrix
+                var t = targetVector,
+                    u = upVector,
+                    v = thirdBasis;
+                rotMatrix = new THREE.Matrix4(
+                    u.x, t.x, v.x, 0,
+                    u.y, t.y, v.y, 0,
+                    u.z, t.z, v.z, 0,
+                    0,   0,    0,   1
+                );
+                
+                armObj.quaternion.setFromRotationMatrix(rotMatrix);
             };
 
             // Move the arms for animation purposes
