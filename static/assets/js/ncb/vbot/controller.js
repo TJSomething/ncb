@@ -143,7 +143,7 @@ VBOT.controller = (function () {
         }
     }
 
-    function initActuationTemplate() {
+    /*function initActuationTemplate() {
         var template = {};
 
         if (capabilities.motion) {
@@ -185,7 +185,7 @@ VBOT.controller = (function () {
         if (capabilities.grab) {
             template.arms.left
         }
-    }
+    }*/
 
     function test() {
         var sandbox = new Worker('assets/js/ncb/vbot/worker.js'),
@@ -238,7 +238,7 @@ VBOT.controller = (function () {
     }
 
     function actuate(e) {
-        console.log(e.data);
+        //console.log(e.data);
         if (e.data !== undefined &&
             e.data.hasOwnProperty('step')) {
             var step = e.data.step;
@@ -257,7 +257,9 @@ VBOT.controller = (function () {
         var remainingAngle,
             targetLoc,
             target,
-            stepAngle;
+            stepAngle,
+            stepAmount,
+            done;
 
         // If the action has no speed or duration, then let's just set the
         // speed to 1
@@ -301,6 +303,40 @@ VBOT.controller = (function () {
             case 'setSpeed':
                 VBOT.robot.speed = action.speed;
                 actionsCompleted.push(action.id);
+                break;
+            case 'pointArmAt':
+                target = VBOT.scene.getObjectByName(action.objName, true);
+                targetLoc = target.centerWorld();
+                done = false;
+                if (action.hasOwnProperty('speed')) {
+                    stepAngle = action.speed * dt;
+                    done = VBOT.robot.rotateArmTowards(action.arm,
+                                                       targetLoc,
+                                                       stepAngle,
+                                                       true,
+                                                       true);
+                } else if (action.hasOwnProperty('timeLeft') ||
+                           action.hasOwnProperty('time')) {
+                    if (action.hasOwnProperty('timeLeft')) {
+                        stepAmount = dt / action.timeLeft;
+                        action.timeLeft -= dt;
+                    } else if (action.hasOwnProperty('time')) {
+                        stepAmount = dt / action.time;
+                        action.timeLeft = action.time - dt;
+                    } else {
+                        throw "Insane logic error in pointArmAt";
+                    }
+                    done = VBOT.robot.rotateArmTowards(action.arm,
+                                                       targetLoc,
+                                                       stepAmount,
+                                                       false,
+                                                       true);
+                } else {
+                    throw "pointArmAt is missing any indication of speed or duration";
+                }
+                if (done) {
+                    actionsCompleted.push(action.id);
+                }
                 break;
         }
     }

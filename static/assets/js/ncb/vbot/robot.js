@@ -253,11 +253,28 @@ VBOT.Robot = (function () {
             /**
              * Points an arm at a target vector, oriented with an up vector
              *
+             * @param arm string which arm to move
              * @param targetVector THREE.Vector3 where the arm should point
              * @param upVector THREE.Vector3 the direction the top of the arm
              * @param isGlobal boolean whether targetVector is local or global
              */
             obj.instantPointArm = function (arm, targetVector, isGlobal, upVector) {
+                obj.rotateArmTowards(arm, targetVector, 1, false, isGlobal, upVector);
+            };
+            
+            /**
+             * Rotates an arm toward pointing at a location
+             *
+             * @param arm string which arm to move
+             * @param targetVector THREE.Vector3 where the arm should point
+             * @param amount float the amount to move the arm, in either radians or 
+             *                     percent of motion remaining
+             * @param inRadians boolean whether the amount is in radians
+             * @param isGlobal boolean whether targetVector is local or global
+             * @param upVector THREE.Vector3 the direction the top of the arm, optional
+             * @return boolean if we're done rotating the arm toward the given vector
+             */
+            obj.rotateArmTowards = function (arm, targetVector, amount, inRadians, isGlobal, upVector) {
                 var isLeft = arm[0] === 'l' || arm[0] === 'L',
                     armObj = isLeft ? larm : rarm,
                     localMatrix = new THREE.Matrix4(),
@@ -265,7 +282,9 @@ VBOT.Robot = (function () {
                     shoulderDisplacement = shoulderLoc.clone().sub(obj.positionWorld()),
                     direction = new THREE.Vector3(0, -1, 0),
                     thirdBasis = new THREE.Vector3(),
-                    rotMatrix;
+                    rotMatrix,
+                    angleDiff,
+                    s;
                 
                 // Don't want to mangle the formal parameters
                 targetVector = targetVector.clone();
@@ -318,7 +337,36 @@ VBOT.Robot = (function () {
                     0,   0,    0,   1
                 );
                 
-                armObj.quaternion.setFromRotationMatrix(rotMatrix);
+                // Make a quaternion to rotate to
+                var q1 = armObj.quaternion,
+                    q2 = new THREE.Quaternion();
+                q2.setFromRotationMatrix(rotMatrix);
+                
+                // If the amount to rotate is in radians, we need to convert to
+                // amount of arc to rotate by in order use SLERP
+                if (inRadians) {
+                    s = q1.w * q2.w +
+                        q1.x * q2.x +
+                        q1.y * q2.y +
+                        q1.z * q2.z;
+                    angleDiff = 2 * Math.acos(Math.abs(s));
+                    amount = amount/angleDiff;
+                }
+                
+                // Prevent overshoot
+                if (amount > 1) {
+                    amount = 1;
+                }
+                
+                // Rotate the stuff
+                armObj.quaternion.slerp(q2, amount);
+                
+                // If it's done moving, then let's say that
+                if (amount === 1) {
+                    return true;
+                } else {
+                    return false;
+                }
             };
 
             // Move the arms for animation purposes
