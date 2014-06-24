@@ -118,9 +118,9 @@ var sensors = null;
      *  Gets the pixel value at x and y, where x and y are in [-1,1].
      */
     function getPixel(x, y) {
-        var pixelX = (x * sensors.camera.width + 0.5)|0,
-            pixelY = (y * sensors.camera.height + 0.5)|0,
-            index = pixelY * sensors.camera.width + pixelX,
+        var pixelX = ((x + 1.0) * 0.5 * (sensors.camera.width - 1))|0,
+            pixelY = ((1.0 - y) * 0.5 * (sensors.camera.height - 1))|0,
+            index = (pixelY * sensors.camera.width + pixelX) * 4,
             r = sensors.camera.data[index],
             g = sensors.camera.data[index + 1],
             b = sensors.camera.data[index + 2],
@@ -155,6 +155,24 @@ var sensors = null;
     function setSpeed(speed) {
         return new Action('setSpeed', {
             speed: speed
+        });
+    }
+
+    /**
+     *  Set the turning speed in radians per second. Can be negative to turn right.
+     */
+    function startTurningLeft(speed) {
+        return new Action('turn', {
+            speed: speed
+        });
+    }
+
+    /**
+     *  Set the turning speed in radians per second. Can be negative to turn left.
+     */
+    function startTurningRight(speed) {
+        return new Action('turn', {
+            speed: -speed
         });
     }
 
@@ -329,6 +347,8 @@ var sensors = null;
     Object.defineProperty(global, 'getPixel', {value: getPixel});
     Object.defineProperty(global, 'turnTowards', {value: turnTowards});
     Object.defineProperty(global, 'setSpeed', {value: setSpeed});
+    Object.defineProperty(global, 'startTurningLeft', {value: startTurningLeft});
+    Object.defineProperty(global, 'startTurningRight', {value: startTurningRight});
     Object.defineProperty(global, 'turnLeft', {value: turnLeft});
     Object.defineProperty(global, 'turnRight', {value: turnRight});
     Object.defineProperty(global, 'goForward', {value: goForward});
@@ -372,6 +392,11 @@ var sensors = null;
             while (newActions.length > 0) {
                 newActions.pop();
             }
+        }
+    });
+    Object.defineProperty(global, 'log', {
+        value: function (error) {
+            postMessage({error: error});
         }
     });
 }(self));

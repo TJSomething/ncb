@@ -41,7 +41,7 @@ function didWeGrabTheTable () {
 }
 
 function isGray(pixel) {
-    return pixel.lightness < 0.3 && pixel.saturation < 0.3;
+    return pixel.value < 30 && pixel.saturation < 30;
 }
 
 function searchForRoad () {
@@ -56,6 +56,7 @@ function searchForRoad () {
     }
 }
 
+var turningSpeed;
 function travelDownTheRoad () {
     // If the pixels at the bottom of the camera aren't dark gray,
     // then we need to find the road again
@@ -65,25 +66,33 @@ function travelDownTheRoad () {
         rightIsGray = isGray(rightPixel);
     if (leftIsGray)  {
         if (rightIsGray) {
-            // If they're both gray, everything is fine
+            // If they're both gray, let's damp our turning speed
+            turningSpeed *= 0.9;
+            startTurningRight(turningSpeed);
         } else {
             // If only the left is road, then we need to turn left
-            startTurningLeft(1.0);
+            turningSpeed = -1.0;
+            startTurningRight(turningSpeed);
             next('searchForRoad');
         }
     } else {
         if (rightIsGray) {
             // If only the right is road, then we need to turn right
-            startTurningRight(1.0);
+            turningSpeed = 1.0;
+            startTurningRight(turningSpeed);
             next('searchForRoad');
         } else {
             // If neither are road, we'll search in a random
             // direction
             if (Math.random() < 0.5) {
-                startTurningRight(1.0);
+                turningSpeed = 1.0;
+                startTurningRight(turningSpeed);
+                setSpeed(0);
                 next('searchForRoad');
             } else {
-                startTurningLeft(1.0);
+                turningSpeed = -1.0;
+                startTurningRight(turningSpeed);
+                setSpeed(0);
                 next('searchForRoad');
             }
         }

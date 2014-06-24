@@ -606,5 +606,9 @@ VBOT.on('render', (function () {
         imageData.data.set(VBOT.cameraData);
         ctx.putImageData(imageData, 0, 0);
         ctx.scale(1, -1);
+        
+        // We also need to width and height
+        VBOT.cameraWidth = canvas.width;
+        VBOT.cameraHeight = canvas.height;
     };
 }()), VBOT);

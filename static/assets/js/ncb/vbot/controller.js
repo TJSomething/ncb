@@ -113,7 +113,11 @@ VBOT.controller = (function () {
             sensors.expression = robot.expression;
         }
 
-        // TODO: add vision
+        sensors.camera = {
+            data: VBOT.cameraData,
+            width: VBOT.cameraWidth,
+            height: VBOT.cameraHeight
+        };
 
         sensors.collision = detectCollisions();
 
@@ -316,6 +320,10 @@ VBOT.controller = (function () {
                 VBOT.robot.speed = action.speed;
                 actionsCompleted.push(action.id);
                 break;
+            case 'turn':
+                VBOT.robot.angularVelocity = action.speed;
+                actionsCompleted.push(action.id);
+                break;
             case 'pointArmAt':
                 target = VBOT.scene.getObjectByName(action.objName, true);
                 targetLoc = target.centerWorld();
@@ -390,7 +398,6 @@ VBOT.controller = (function () {
                 break;
             default:
                 throw action.action + ' is not available';
-                break;
         }
     }
 
