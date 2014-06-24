@@ -351,7 +351,7 @@ VBOT.readyScene = function (character) {
         //  add it to the portable list
         if (/portable/i.test(obj.name)) {
             app.portables.push(obj);
-            app.physics.addObject(obj, {isStatic: false});
+            app.physics.addObject(obj, {type: 'dynamic'});
         }
     }
 

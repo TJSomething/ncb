@@ -1,10 +1,11 @@
 /* jslint worker: true, evil: true */
 /* global esprima, loadScript, getAction, next, completeAction, run,
-          newActions, clearNewActions */
+          newActions, clearNewActions, _ */
 
 'use strict';
 
 importScripts('../../lib/esprima.js');
+importScripts('../../lib/underscore.js');
 
 var sensors = null;
 
@@ -68,7 +69,7 @@ var sensors = null;
             if (this.time !== undefined) {
                 delete this.time;
             }
-            this.speed = newState;
+            this.speed = speed;
             return this;
         }
     };
@@ -249,12 +250,39 @@ var sensors = null;
             expression: expression
         });
     }
+    
+    /**
+     *  Grabs the object that is intersecting with the hand
+     *  with the right arm
+     */
+    function grabWithRightArm() {
+        return new Action('grab', {
+            arm: 'right'
+        });
+    }
+    
+    /**
+     *  Grabs the object that is intersecting with the hand
+     *  with the left arm
+     */
+    function grabWithLeftArm() {
+        return new Action('grab', {
+            arm: 'left'
+        });
+    }
 
     /**
      *  Sets the state.
      */
     function next(newState) {
-        state = newState;
+        if (_.isString(newState) &&
+            states.hasOwnProperty(newState)) {
+            state = newState;
+        } else if (typeof newState === 'function') {
+            state = newState.name;
+        } else {
+            throw 'Invalid next state ' + newState;
+        }
     }
 
     function loadScript(script) {
@@ -273,7 +301,7 @@ var sensors = null;
             ast.body.forEach(function (astNode) {
                 // Only use it if it's a function
                 if (astNode.type === 'FunctionDeclaration') {
-                    // If this is the first function, then it's the starting
+                    // If this i$s the first function, then it's the starting
                     // state
                     if (state === null) {
                         state = astNode.id.name;
@@ -310,6 +338,8 @@ var sensors = null;
     Object.defineProperty(global, 'pointRightArm', {value: pointRightArm});
     Object.defineProperty(global, 'pointLeftArm', {value: pointLeftArm});
     Object.defineProperty(global, 'changeExpression', {value: changeExpression});
+    Object.defineProperty(global, 'grabWithLeftArm', {value: grabWithLeftArm});
+    Object.defineProperty(global, 'grabWithRightArm', {value: grabWithRightArm});
     Object.defineProperty(global, 'next', {value: next});
     Object.defineProperty(global, 'state',
         {
@@ -390,7 +420,10 @@ self.addEventListener('message', function (oEvent) {
             clearNewActions();
         } catch (e) {
             // If there was an error running their stuff, tell them
-            reply.error = e.message;
+            reply.error = {
+                message: e.message,
+                stack: e.stack
+            };
             postMessage(reply);
         }
     }

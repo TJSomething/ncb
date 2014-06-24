@@ -219,12 +219,16 @@ VBOT.physics = (function () {
             updateObject(dt, dynamicObjects[i]);
         }
     }
+    
+    function dot(v, u) {
+        return u.x * v.x + u.y * v.y + u.z * v.z;
+    }
 
     function testOBBOBB(a, b) {
         var ra = 0,
             rb = 0,
-            R = new THREE.Matrix3(),
-            AbsR = new THREE.Matrix3(),
+            R = {elements: new Float32Array(9)},
+            AbsR = {elements: new Float32Array(9)},
             i, j,
             t = new THREE.Vector3(),
             // Putting these into arrays for for-loops
@@ -238,7 +242,7 @@ VBOT.physics = (function () {
         // Compute rotation matrix expressing b in a's coordinate frame
         for (i = 0; i < 3; i += 1) {
             for (j = 0; j < 3; j += 1) {
-                R.elements[3 * j + i] = a.u[i].dot(b.u[j]);
+                R.elements[3 * j + i] = dot(a.u[i], b.u[j]);
             }
         }
 
@@ -246,9 +250,9 @@ VBOT.physics = (function () {
         t.subVectors(b.c, a.c);
         // Bring translation into a's coordinate frame
         t = new THREE.Vector3(
-            t.dot(a.u[0]),
-            t.dot(a.u[1]),
-            t.dot(a.u[2]));
+            dot(t, a.u[0]),
+            dot(t, a.u[1]),
+            dot(t, a.u[2]));
         tArr = [t.x, t.y, t.z];
 
         // Compute common subexpressions. Add in an epsilon term to
@@ -294,7 +298,7 @@ VBOT.physics = (function () {
                 normal.set(R.elements[3 * i],
                            R.elements[3 * i + 1],
                            R.elements[3 * i + 2]);
-                normal.multiplyScalar(-Math.sign(normal.dot(t)));
+                normal.multiplyScalar(-Math.sign(dot(normal, t)));
             }
         }
         
@@ -314,7 +318,7 @@ VBOT.physics = (function () {
             normal.set(0,
                        -R.elements[3 * 0 + 2],
                        R.elements[3 * 0 + 1]);
-            normal.multiplyScalar(-Math.sign(normal.dot(t)));
+            normal.multiplyScalar(-Math.sign(dot(normal,t)));
         }
 
         // Test axis L = A0 x B1
@@ -331,7 +335,7 @@ VBOT.physics = (function () {
             normal.set(0,
                        -R.elements[3 * 1 + 2],
                        R.elements[3 * 1 + 1]);
-            normal.multiplyScalar(-Math.sign(normal.dot(t)));
+            normal.multiplyScalar(-Math.sign(dot(normal, t)));
         }
 
         // Test axis L = A0 x B2
@@ -348,7 +352,7 @@ VBOT.physics = (function () {
             normal.set(0,
                        -R.elements[3 * 2 + 2],
                        R.elements[3 * 2 + 1]);
-            normal.multiplyScalar(-Math.sign(normal.dot(t)));
+            normal.multiplyScalar(-Math.sign(dot(normal, t)));
         }
 
         // Test axis L = A1 x B0
@@ -365,7 +369,7 @@ VBOT.physics = (function () {
             normal.set(-R.elements[3 * 0 + 2],
                        0,
                        R.elements[3 * 0 + 0]);
-            normal.multiplyScalar(-Math.sign(normal.dot(t)));
+            normal.multiplyScalar(-Math.sign(dot(normal, t)));
         }
 
         // Test axis L = A1 x B1
@@ -382,7 +386,7 @@ VBOT.physics = (function () {
             normal.set(R.elements[3 * 1 + 2],
                        0,
                        R.elements[3 * 1 + 0]);
-            normal.multiplyScalar(-Math.sign(normal.dot(t)));
+            normal.multiplyScalar(-Math.sign(dot(normal, t)));
         }
 
         // Test axis L = A1 x B2
@@ -399,7 +403,7 @@ VBOT.physics = (function () {
             normal.set(R.elements[3 * 2 + 2],
                        0,
                        R.elements[3 * 2 + 0]);
-            normal.multiplyScalar(-Math.sign(normal.dot(t)));
+            normal.multiplyScalar(-Math.sign(dot(normal, t)));
         }
 
         // Test axis L = A2 x B0
@@ -416,7 +420,7 @@ VBOT.physics = (function () {
             normal.set(R.elements[3 * 0 + 1],
                        R.elements[3 * 0 + 0],
                        0);
-            normal.multiplyScalar(-Math.sign(normal.dot(t)));
+            normal.multiplyScalar(-Math.sign(dot(normal, t)));
         }
 
         // Test axis L = A2 x B1
@@ -433,7 +437,7 @@ VBOT.physics = (function () {
             normal.set(R.elements[3 * 1 + 1],
                        R.elements[3 * 1 + 0],
                        0);
-            normal.multiplyScalar(-Math.sign(normal.dot(t)));
+            normal.multiplyScalar(-Math.sign(dot(normal, t)));
         }
 
         // Test axis L = A2 x B2
@@ -450,7 +454,7 @@ VBOT.physics = (function () {
             normal.set(R.elements[3 * 2 + 1],
                        R.elements[3 * 2 + 0],
                        0);
-            normal.multiplyScalar(-Math.sign(normal.dot(t)));
+            normal.multiplyScalar(-Math.sign(dot(normal, t)));
         }
 
         // Rotate our normal into the first object's rotation

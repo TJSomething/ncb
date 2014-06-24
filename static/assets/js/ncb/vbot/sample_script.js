@@ -24,8 +24,8 @@ function pointToTable () {
 }
 
 function grabTable () {
-    grabWithRightArm().then('didWeGrabTheTable');
-    next('wait');
+    grabWithRightArm();
+    next(didWeGrabTheTable);
 }
 
 function didWeGrabTheTable () {
@@ -34,10 +34,10 @@ function didWeGrabTheTable () {
         // smile, then search for the road
         pointRightArm(0.0, 1.0, 0.0). // Point arm up
             over(1.0).                // Over a second
-            then('search for road');
-        setExpression('smile');
+            then('searchForRoad');
+        //setExpression('smile');
+        next('wait');
     }
-    next('wait');
 }
 
 function isGray(pixel) {
@@ -61,7 +61,7 @@ function travelDownTheRoad () {
     // then we need to find the road again
     var leftPixel = getPixel(-0.1, -1.0),
         rightPixel = getPixel(0.1, -1.0),
-        leftIsGray = isGray(leftPixel)
+        leftIsGray = isGray(leftPixel),
         rightIsGray = isGray(rightPixel);
     if (leftIsGray)  {
         if (rightIsGray) {

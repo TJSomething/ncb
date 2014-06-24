@@ -96,9 +96,15 @@ VBOT.controller = (function () {
         }
 
         if (capabilities.arms) {
-            sensors.arms = {};
-            sensors.arms.left = robot.getArmAngle('l');
-            sensors.arms.right = robot.getArmAngle('r');
+            sensors.arms = {
+                left: {
+                    held: robot.leftHandObject && robot.leftHandObject.name
+                },
+                right: {
+                    held: robot.rightHandObject && robot.rightHandObject.name
+                }
+                
+            };
 
             // TODO: add arm velocities
         }
@@ -155,6 +161,7 @@ VBOT.controller = (function () {
             };
         }
 
+            console.log(sense());
         if (capabilities.arms) {
             template.arms = {
                 left: {
@@ -238,12 +245,17 @@ VBOT.controller = (function () {
     }
 
     function actuate(e) {
-        //console.log(e.data);
+        if (e.data.error) {
+            console.log(e.data.error);
+        }
         if (e.data !== undefined &&
             e.data.hasOwnProperty('step')) {
             var step = e.data.step;
 
             if (e.data.actions) {
+                e.data.actions.forEach(function (action) {
+                    console.log(action.action);
+                });
                 actionQueue = actionQueue.concat(e.data.actions);
             }
 
@@ -338,6 +350,47 @@ VBOT.controller = (function () {
                     actionsCompleted.push(action.id);
                 }
                 break;
+            case 'grab':
+                console.log('go');
+                robot.pickUpAtHand(action.arm);
+                actionsCompleted.push(action.id);
+                break;
+            case 'pointArm':
+                targetLoc = THREE.Vector3.prototype.clone.call(action.direction);
+                done = false;
+                if (action.hasOwnProperty('speed')) {
+                    stepAngle = action.speed * dt;
+                    done = VBOT.robot.rotateArmTowards(action.arm,
+                                                       targetLoc,
+                                                       stepAngle,
+                                                       true,
+                                                       false);
+                } else if (action.hasOwnProperty('timeLeft') ||
+                           action.hasOwnProperty('time')) {
+                    if (action.hasOwnProperty('timeLeft')) {
+                        stepAmount = dt / action.timeLeft;
+                        action.timeLeft -= dt;
+                    } else if (action.hasOwnProperty('time')) {
+                        stepAmount = dt / action.time;
+                        action.timeLeft = action.time - dt;
+                    } else {
+                        throw "Insane logic error in pointArmAt";
+                    }
+                    done = VBOT.robot.rotateArmTowards(action.arm,
+                                                       targetLoc,
+                                                       stepAmount,
+                                                       false,
+                                                       false);
+                } else {
+                    throw "pointArm is missing any indication of speed or duration";
+                }
+                if (done) {
+                    actionsCompleted.push(action.id);
+                }
+                break;
+            default:
+                throw action.action + ' is not available';
+                break;
         }
     }
 
@@ -393,7 +446,7 @@ VBOT.controller = (function () {
 
         return collisions;
     }
-
+    
     return {
         init: init,
         test: test,

@@ -40,7 +40,7 @@ VBOT.Robot = (function () {
             obj.add(steve);
             obj.app.physics.addObject(obj,
                 {
-                    isStatic: false,
+                    type: 'dynamic',
                     state: 'controlled'
                 });
 
@@ -96,7 +96,7 @@ VBOT.Robot = (function () {
             }());
 
             // This anchors an object to the nearest arm
-            obj.grab = function (target) {
+            obj.grab = function (target, arm) {
                 var worldPosition = target.positionWorld(),
                     llarm = larm.children[0], // lower left arm
                     lrarm = rarm.children[0], // lower right arm
@@ -105,10 +105,14 @@ VBOT.Robot = (function () {
                     distToLeftElbow = worldPosition.distanceTo(leftElbow),
                     distToRightElbow = worldPosition.distanceTo(rightElbow),
                     oldParentMatrix = target.parent.matrixWorld,
-                    reverseParentTransform = new THREE.Matrix4();
+                    reverseParentTransform = new THREE.Matrix4(),
+                    isArmSet = arm !== undefined,
+                    isLeft = isArmSet && (arm[0] === 'l' || arm[0] === 'L'),
+                    isLeftCloser = distToLeftElbow < distToRightElbow;
 
                 // Attach the target to the nearest arm
-                if (distToLeftElbow < distToRightElbow) {
+                if ((isArmSet && isLeft) ||
+                    (!isArmSet && isLeftCloser)) {
                     llarm.add(target);
                 } else {
                     lrarm.add(target);
@@ -308,8 +312,8 @@ VBOT.Robot = (function () {
                 // Convert the targetVector into local space, if needed
                 if (isGlobal) {
                     targetVector.
-                        applyMatrix4(localMatrix).
-                        sub(shoulderDisplacement);
+                        sub(shoulderDisplacement).
+                        applyMatrix4(localMatrix);
                 }
                 targetVector.
                     multiplyScalar(-1);
@@ -479,7 +483,7 @@ VBOT.Robot = (function () {
                 // Check if we can reach the object
                 function finishPickingUp () {
                     if (checkHandCollision(arm, target)) {
-                        obj.grab(target);
+                        obj.grab(target, arm);
 
                         if (isLeftCloser) {
                             leftHandObject = target;
@@ -539,7 +543,7 @@ VBOT.Robot = (function () {
                 }
 
                 if (intersectingObj !== undefined) {
-                    obj.grab(intersectingObj);
+                    obj.grab(intersectingObj, arm);
 
                     if (arm[0] === 'l' || arm[0] === 'L') {
                         leftHandObject = intersectingObj;
@@ -552,6 +556,19 @@ VBOT.Robot = (function () {
                     return false;
                 }
             };
+            
+            Object.defineProperties(obj, {
+                   leftHandObject: {
+                           get: function () {
+                                   return leftHandObject;
+                           }
+                   },
+                   rightHandObject: {
+                           get: function () {
+                                   return rightHandObject;
+                           }
+                   }
+            });
 
             document.addEventListener( 'keydown', function (event) {
                 switch (event.keyCode) {
