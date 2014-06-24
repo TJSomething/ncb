@@ -13,7 +13,8 @@ VBOT.physics = (function () {
         staticObjectIndices = {},
         EPSILON = 0.000001,
         staticCollisionResolution = 0.1,
-        collisionVolumeObjects = new THREE.Object3D();
+        collisionVolumeObjects = new THREE.Object3D(),
+        groundElevation = Infinity;
 
     function initDynamicObject(obj) {
         var bWorld = (new THREE.Box3()).setFromObject(obj.geometry),
@@ -54,6 +55,7 @@ VBOT.physics = (function () {
                             e = bWorld.max.clone().
                                 sub(bWorld.min).
                                 divideScalar(2),
+                            u = [new Vec(), new Vec(), new Vec()],
                             mat = obj.geometry.matrixWorld;
 
                         return function () {
@@ -62,19 +64,21 @@ VBOT.physics = (function () {
                                 c: c.clone().applyMatrix4(mat),
                                 // Decompose matrix into bases
                                 u: (function () {
-                                    var x = new Vec(mat.elements[0],
-                                                    mat.elements[1],
-                                                    mat.elements[2]),
-                                        y = new Vec(mat.elements[4],
-                                                    mat.elements[5],
-                                                    mat.elements[6]),
-                                        z = new Vec(mat.elements[8],
-                                                    mat.elements[9],
-                                                    mat.elements[10]);
-
-                                    return [x.normalize(),
-                                            y.normalize(),
-                                            z.normalize()];
+                                    u[0].x = mat.elements[0];
+                                    u[0].y = mat.elements[1];
+                                    u[0].z = mat.elements[2];
+                                    u[1].x = mat.elements[4];
+                                    u[1].y = mat.elements[5];
+                                    u[1].z = mat.elements[6];
+                                    u[2].x = mat.elements[8];
+                                    u[2].y = mat.elements[9];
+                                    u[2].z = mat.elements[10];
+                                    
+                                    u[0].normalize();
+                                    u[1].normalize();
+                                    u[2].normalize();
+                                   
+                                    return u;
                                 }()),
                                 e: e
                             };
@@ -125,15 +129,26 @@ VBOT.physics = (function () {
 
         staticObjects.push(obj);
         staticObjectIndices[obj.geometry.id] = staticObjects.length - 1;
+        
+        updateGround(obj);
+    }
+    
+    function updateGround(obj) {
+        var objAABB = new THREE.Box3().setFromObject(obj.geometry);
+        
+        if (groundElevation > objAABB.max.y) {
+            groundElevation = objAABB.max.y;
+        }
     }
 
     function getGlobalFaces(obj) {
-        var vertices = obj.geometry.geometry.vertices,
+        var vertices,
             matrixWorld = obj.geometry.matrixWorld,
             // Transform our vertices into global coordinates
             globalVertices;
 
-        if (vertices) {
+        if (obj.geometry.hasOwnProperty('geometry')) {
+            vertices = obj.geometry.geometry.vertices;
             globalVertices = vertices.map(function (vertex) {
                 return vertex.clone().applyMatrix4(matrixWorld);
             });
@@ -163,15 +178,17 @@ VBOT.physics = (function () {
                     state: p.state || 'rest',
                     // The object should be static if this flag is not passed,
                     //  or to the passed value
-                    isStatic: p.isStatic === undefined || p.isStatic
+                    type: p.type === undefined ? 'static' : p.type
                 };
             }())
         };
 
-        if (physicsObj.physics.isStatic) {
+        if (physicsObj.physics.type === 'static') {
             initStaticObject(physicsObj);
-        } else {
+        } else if (physicsObj.physics.type === 'dynamic') {
             initDynamicObject(physicsObj);
+        } else {
+            throw physicsObj.physics.type + ' is not an object type';
         }
     }
 
@@ -688,6 +705,36 @@ VBOT.physics = (function () {
             penetration: penetration
         };
     }
+    
+    function testOBBGround(obb, groundElevation) {
+        var signX, signY, signZ,
+            Y,
+            minY = Infinity,
+            penetration;
+        
+        for (signX = -1; signX <= 1; signX += 2) {
+            for (signY = -1; signY <= 1; signY += 2) {
+                for (signZ = -1; signZ <= 1; signZ += 2) {
+                    Y = obb.c.y + signX * obb.e.x * obb.u[0].y +
+                                  signY * obb.e.y * obb.u[1].y +
+                                  signZ * obb.e.z * obb.u[2].y;
+                    if (minY > Y) {
+                        minY = Y;
+                    }
+                }
+            }
+        }
+        
+        penetration = groundElevation - minY;
+        if (penetration > 0) {
+            return {
+                penetration: penetration,
+                contactNormal: new THREE.Vector3(0, 1, 0)
+            };
+        } else {
+            return false;
+        }
+    }
 
     function convertBox3ToOBB(box) {
         return {
@@ -894,7 +941,7 @@ VBOT.physics = (function () {
                     obj2.physics.orientedBoundingBox);
             if (collision) {
                 collision.otherObject = obj2.geometry;
-                collision.isEnvironment = false;
+                collision.type = 'dynamic';
                 return collision;
             }
         }
@@ -907,21 +954,27 @@ VBOT.physics = (function () {
     function detectSingleStaticCollision (obj1, obj2) {
         var collision, bestCollision = {
                 penetration: -Infinity
-            };
+            },
+            i,
+            obb;
         // Prevent self testing
         if (obj1 !== obj2) {
-            obj2.physics.obbs.forEach(function (obb) {
+            for (i = 0; i < obj2.physics.obbs.length; i += 1) {
+                obb = obj2.physics.obbs[i];
                 // Oriented bounding box check
                 collision = testOBBOBB(obj1.physics.orientedBoundingBox,
                         obb);
                 if (collision) {
+                    if (obj1.geometry.name === 'portable_table') {
+                        //console.log(collision.contactNormal.z);
+                    }
                     collision.otherObject = obj2.geometry;
-                    collision.isEnvironment = true;
+                    collision.type = 'static';
                     if (collision.penetration > bestCollision.penetration) {
                         bestCollision = collision;
                     }
                 }
-            });
+            }
 
             if (bestCollision.penetration > 0) {
                 return bestCollision;
@@ -953,17 +1006,25 @@ VBOT.physics = (function () {
             return false;
         }
     }
+    
+    function detectGroundCollision(obj) {
+        var collision = testOBBGround(obj.physics.orientedBoundingBox, groundElevation);
+        if (collision) {
+            collision.type = 'ground';
+        }
+        return collision;
+    }
 
     function getHoldingObject(obj) {
         var ancestor;
 
         if (obj.physics.state === 'held') {
             ancestor = obj.geometry;
-            while (!(getPhysicsObject(ancestor) &&
-                getPhysicsObject(ancestor).physics.state === 'controlled')) {
+            while (!(getPhysicsObject(ancestor, 'dynamic') &&
+                getPhysicsObject(ancestor, 'dynamic').physics.state === 'controlled')) {
                 ancestor = ancestor.parent;
             }
-            ancestor = getPhysicsObject(ancestor);
+            ancestor = getPhysicsObject(ancestor, 'dynamic');
             return ancestor;
         }
     }
@@ -996,6 +1057,12 @@ VBOT.physics = (function () {
                     dynamicObjects[i].geometry.collisions.push(collision);
                 }
             }
+            
+            // Test against the ground
+            collision = detectGroundCollision(dynamicObjects[i]);
+            if (collision) {
+                dynamicObjects[i].geometry.collisions.push(collision);
+            }
         }
 
         // If the current position has no collisions, note the current
@@ -1011,31 +1078,42 @@ VBOT.physics = (function () {
     }
 
     function changeObjectState(obj, newState) {
-        getPhysicsObject(obj, false).physics.state = newState;
+        getPhysicsObject(obj, 'dynamic').physics.state = newState;
     }
 
-    function getPhysicsObject(obj, isStatic) {
-        if (!isStatic &&
+    function getPhysicsObject(obj, type) {
+        if (type === 'dynamic' &&
             dynamicObjectIndices.hasOwnProperty(obj.id)) {
             return dynamicObjects[dynamicObjectIndices[obj.id]];
         }
-        if (isStatic &&
+        if (type === 'static' &&
             staticObjectIndices.hasOwnProperty(obj.id)) {
             return staticObjects[staticObjectIndices[obj.id]];
         }
+        if (type === 'ground') {
+            return undefined;
+        }
+        if (type === undefined) {
+            throw type + ' is not an object type';
+        }
+        return undefined;
     }
 
-    function detectCollision(obj1, obj2, isStatic) {
-        if (isStatic) {
+    function detectCollision(obj1, obj2, type) {
+        if (type === 'static') {
             return detectSingleStaticCollision(obj1, obj2);
-        } else {
+        } else if (type === 'dynamic') {
             return detectDynamicCollision(obj1, obj2);
+        } else if (type === 'ground') {
+            return detectGroundCollision(obj1);
+        } else {
+            throw type + ' is not an object type';
         }
     }
 
     function resolveCollision(dt, obj) {
-        function resolveControlled(obj, otherObject, isStatic) {
-            var newCollision = detectCollision(obj, otherObject, isStatic),
+        function resolveControlled(obj, otherObject, type) {
+            var newCollision = detectCollision(obj, otherObject, type),
                 displacement;
 
             // Ignore collisions with held objects
@@ -1052,7 +1130,7 @@ VBOT.physics = (function () {
             }
         }
 
-        function resolveHeld(obj, otherObject, isStatic) {
+        function resolveHeld(obj, otherObject, type) {
             // If the object is held, then we'll displace the
             // holding object, unless the other object is
             // the holding object
@@ -1066,10 +1144,11 @@ VBOT.physics = (function () {
                 displacementAlongArm,
                 displacementPerpendicularToArm,
                 angularDisplacement,
-                yDisplacement;
+                yDisplacement,
+                temp;
 
             if (otherObject !== holder) {
-                newCollision = detectCollision(obj, otherObject, isStatic);
+                newCollision = detectCollision(obj, otherObject, type);
                 if (newCollision) {
                     displacement = newCollision.contactNormal.clone().
                             multiplyScalar(newCollision.penetration);
@@ -1101,12 +1180,19 @@ VBOT.physics = (function () {
                     //  is perpendicular
                     displacementPerpendicularToArm = yDisplacement.clone().
                         sub(displacementAlongArm);
-
+                    
                     angularDisplacement = displacementPerpendicularToArm.
                         clone().
                         cross(armVector).
                         multiplyScalar(armLength);
 
+                    // For some godawful reason, x and z get switched and I
+                    // don't know why, but you get some weird behavior if you don't
+                    // switch them
+                    temp = angularDisplacement.x;
+                    angularDisplacement.x = angularDisplacement.z;
+                    angularDisplacement.z = temp;
+                    
                     shoulder.rotateOnAxis(
                         angularDisplacement.clone().normalize(),
                         angularDisplacement.length());
@@ -1122,8 +1208,8 @@ VBOT.physics = (function () {
             }
         }
 
-        function resolveFalling(obj, otherObject, isStatic) {
-            var newCollision = detectCollision(obj, otherObject, isStatic),
+        function resolveFalling(obj, otherObject, type) {
+            var newCollision = detectCollision(obj, otherObject, type),
                 displacement;
 
             if (newCollision) {
@@ -1133,7 +1219,8 @@ VBOT.physics = (function () {
                 obj.geometry.updateMatrixWorld();
                 // If we hit the ground, then stop falling
                 if (displacement.y > 0 &&
-                    newCollision.isEnvironment) {
+                    (newCollision.type === 'static' ||
+                     newCollision.type === 'ground')) {
                     obj.physics.state = 'rest';
                 }
             }
@@ -1145,22 +1232,22 @@ VBOT.physics = (function () {
                 return b.penetration - a.penetration;
             });
             obj.geometry.collisions.forEach(function (collision) {
-                var isStatic = collision.isEnvironment,
+                var type = collision.type,
                     otherObject = getPhysicsObject(
                         collision.otherObject,
-                        isStatic);
+                        type);
 
                 obj.geometry.updateMatrixWorld();
 
                 switch (obj.physics.state) {
                     case 'controlled':
-                        resolveControlled(obj, otherObject, isStatic);
+                        resolveControlled(obj, otherObject, type);
                         break;
                     case 'held':
-                        resolveHeld(obj, otherObject, isStatic);
+                        resolveHeld(obj, otherObject, type);
                         break;
                     case 'falling':
-                        resolveFalling(obj, otherObject, isStatic);
+                        resolveFalling(obj, otherObject, type);
                         break;
                 }
             });
