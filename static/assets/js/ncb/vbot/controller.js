@@ -1,17 +1,18 @@
 /* jslint browser: true */
 /* global THREE, $:false, _:false, console, mod */
 
-'use strict';
-
-var VBOT = VBOT ||  {};
-
 // Note that this depends on the the robot being loaded
-VBOT.controller = (function () {
+(function (global) {
+    'use strict';
+    
+    global.VBOT = global.VBOT || {};
+    var VBOT = global.VBOT;
+    
     var capabilities,
         robot,
         actionQueue = [],
         worker,
-        actionsCompleted = [];
+        actionsCompleted = [];    
 
     function init() {
         robot = VBOT.robot;
@@ -454,9 +455,9 @@ VBOT.controller = (function () {
         return collisions;
     }
     
-    return {
+    VBOT.controller = {
         init: init,
         test: test,
         step: step
     };
-}());
+}(this));

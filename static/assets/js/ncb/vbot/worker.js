@@ -2,14 +2,12 @@
 /* global esprima, loadScript, getAction, next, completeAction, run,
           newActions, clearNewActions, _ */
 
-'use strict';
-
 importScripts('../../lib/esprima.js');
 importScripts('../../lib/underscore.js');
 
-var sensors = null;
-
 (function (global) {
+    'use strict';
+    
     var state = null;
     var runningActions = {};
     var newActions = [];
@@ -118,13 +116,13 @@ var sensors = null;
      *  Gets the pixel value at x and y, where x and y are in [-1,1].
      */
     function getPixel(x, y) {
-        var pixelX = ((x + 1.0) * 0.5 * (sensors.camera.width - 1))|0,
-            pixelY = ((1.0 - y) * 0.5 * (sensors.camera.height - 1))|0,
-            index = (pixelY * sensors.camera.width + pixelX) * 4,
-            r = sensors.camera.data[index],
-            g = sensors.camera.data[index + 1],
-            b = sensors.camera.data[index + 2],
-            a = sensors.camera.data[index + 3],
+        var pixelX = ((x + 1.0) * 0.5 * (global.sensors.camera.width - 1))|0,
+            pixelY = ((1.0 - y) * 0.5 * (global.sensors.camera.height - 1))|0,
+            index = (pixelY * global.sensors.camera.width + pixelX) * 4,
+            r = global.sensors.camera.data[index],
+            g = global.sensors.camera.data[index + 1],
+            b = global.sensors.camera.data[index + 2],
+            a = global.sensors.camera.data[index + 3],
             hsv = rgb2hsv(r, g, b);
 
         return {
@@ -399,57 +397,57 @@ var sensors = null;
             postMessage({error: error});
         }
     });
-}(self));
+    
+    global.addEventListener('message', function (oEvent) {
+        var reply = {};
 
-self.addEventListener('message', function (oEvent) {
-    var reply = {};
-
-    // If this is our first message
-    if (oEvent.data.start) {
-        // Load up the script as a state machine
-        try {
-            loadScript(oEvent.data.script);
-            postMessage({loaded: true});
-        } catch (e) {
-            // If there's an error in their script, send them a message
-            reply.error = e.message;
-            postMessage(reply);
-        }
-    } else if (oEvent.data.sensors) {
-        // Make sensor data available
-        sensors = oEvent.data.sensors;
-        // Check if any of the current actions have completed
-        if (oEvent.data.actionsCompleted) {
-            oEvent.data.actionsCompleted.forEach(function (actionId) {
-                if (getAction(actionId)) {
-                    // If the action has a state to set after it completes,
-                    // then set that
-                    if (getAction(actionId).newState) {
-                        next(getAction(actionId).newState);
+        // If this is our first message
+        if (oEvent.data.start) {
+            // Load up the script as a state machine
+            try {
+                loadScript(oEvent.data.script);
+                postMessage({loaded: true});
+            } catch (e) {
+                // If there's an error in their script, send them a message
+                reply.error = e.message;
+                postMessage(reply);
+            }
+        } else if (oEvent.data.sensors) {
+            // Make sensor data available
+            global.sensors = oEvent.data.sensors;
+            // Check if any of the current actions have completed
+            if (oEvent.data.actionsCompleted) {
+                oEvent.data.actionsCompleted.forEach(function (actionId) {
+                    if (getAction(actionId)) {
+                        // If the action has a state to set after it completes,
+                        // then set that
+                        if (getAction(actionId).newState) {
+                            next(getAction(actionId).newState);
+                        }
+                        completeAction(actionId);
                     }
-                    completeAction(actionId);
-                }
-            });
+                });
+            }
+            // Run the current state
+            try {
+                run();
+                // Prep a message to send back
+                // Send over the newly queued actions
+                reply.actions = newActions;
+                // We actually end up threading the time interval into our
+                // actuation call
+                reply.step = oEvent.data.step;
+                // Send the message back
+                postMessage(reply);
+                clearNewActions();
+            } catch (e) {
+                // If there was an error running their stuff, tell them
+                reply.error = {
+                    message: e.message,
+                    stack: e.stack
+                };
+                postMessage(reply);
+            }
         }
-        // Run the current state
-        try {
-            run();
-            // Prep a message to send back
-            // Send over the newly queued actions
-            reply.actions = newActions;
-            // We actually end up threading the time interval into our
-            // actuation call
-            reply.step = oEvent.data.step;
-            // Send the message back
-            postMessage(reply);
-            clearNewActions();
-        } catch (e) {
-            // If there was an error running their stuff, tell them
-            reply.error = {
-                message: e.message,
-                stack: e.stack
-            };
-            postMessage(reply);
-        }
-    }
-});
+    });
+}(self));
