@@ -10,6 +10,7 @@
 
     VBOT.FPS = 60;
     VBOT.size = calcSize();
+    VBOT.running = true;
 
     makePublisher(VBOT);
     
@@ -24,7 +25,7 @@
             aspect: aspect
         };
     }
-    window.addEventListener('resize', calcSize, false);
+    window.addEventListener('resize', function () { VBOT.size = calcSize(); }, false);
 
     VBOT.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
         var bar = document.getElementById('vbot-progress-bar'),
@@ -592,28 +593,36 @@
 
             window.setInterval(
                 function () {
-                    accumulator += Date.now()/1000 - time;
-                    time = Date.now()/1000;
+                    if (VBOT.running) {
+                        accumulator += Date.now()/1000 - time;
+                        time = Date.now()/1000;
 
-                    if (accumulator > tickLength) {
-                        dt = accumulator - (accumulator % tickLength);
-                        // If we have an especially long frame
-                        if (dt > 0.1) {
-                            // We're going to pretend that it was short
-                            dt = 0.1;
-                            // And reset the accumulator
-                            accumulator = 0;
-                        } else {
-                            accumulator -= dt;
+                        if (accumulator > tickLength) {
+                            dt = accumulator - (accumulator % tickLength);
+                            // If we have an especially long frame
+                            if (dt > 0.1) {
+                                // We're going to pretend that it was short
+                                dt = 0.1;
+                                // And reset the accumulator
+                                accumulator = 0;
+                            } else {
+                                accumulator -= dt;
+                            }
+                            that.logicStats.begin();
+                            that.fire('logic-tick', dt);
+                            that.fire('physics-tick', dt);
+                            that.logicStats.end();
                         }
-                        that.logicStats.begin();
-                        that.fire('logic-tick', dt);
-                        that.fire('physics-tick', dt);
-                        that.logicStats.end();
                     }
-
                 }, tickLength);
         }());
+    };
+    
+    VBOT.pause = function (pauseState) {
+        if (VBOT.hasOwnProperty('controls')) {
+            VBOT.controls.enabled = !pauseState;
+        }
+        VBOT.running = !pauseState;
     };
 
     VBOT.on('scene-loaded', 'readyScene', VBOT);
