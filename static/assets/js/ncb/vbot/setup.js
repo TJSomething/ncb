@@ -8,10 +8,23 @@
     
     var VBOT = global.VBOT;
 
-    VBOT.ASPECT = 16 / 9;
     VBOT.FPS = 60;
+    VBOT.size = calcSize();
 
     makePublisher(VBOT);
+    
+    function calcSize() {
+        var width = window.innerWidth,
+            height = window.innerHeight - $('div.navbar').outerHeight(),
+            aspect = width / height;
+        
+        return {
+            width: width,
+            height: height,
+            aspect: aspect
+        };
+    }
+    window.addEventListener('resize', calcSize, false);
 
     VBOT.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
         var bar = document.getElementById('vbot-progress-bar'),
@@ -34,6 +47,21 @@
             }
         }
     };
+    
+    // Resizes the viewport to fill the screen under the toolbar
+    function resizeViewportContainer() {
+        if (VBOT.hasOwnProperty('container')) {
+            var style = VBOT.container.style,
+                toolbarHeight = $('div.navbar').outerHeight();
+
+            style.position = 'absolute';
+            style.width = VBOT.size.width + 'px';
+            style.height = VBOT.size.height + 'px';
+            style.left = '0px';
+            style.top = toolbarHeight + 'px';
+        }
+    }
+    window.addEventListener('resize', resizeViewportContainer, false);
 
     VBOT.initViewport = function () {
         var width, height, left, top,
@@ -49,12 +77,12 @@
         // Put the view pane in the right spot
         this.container = document.createElement('div');
         document.getElementById('vbot-body').appendChild(this.container);
-        this.container.style.position = 'relative';
+        resizeViewportContainer();
 
         taskDone();
 
         width = this.container.offsetWidth;
-        height = width / this.ASPECT;
+        height = this.container.offsetHeight;
         left = this.container.offsetLeft;
         top = this.container.offsetTop;
 
@@ -276,7 +304,7 @@
             app.showProgress('Prepping objects', tasksLeft, maxTasks);
         }
 
-        function taskDone() {
+        function taskDone() {            
             tasksLeft -= 1;
 
             app.showProgress('Prepping objects', tasksLeft, maxTasks);
@@ -293,7 +321,7 @@
                 }
 
                 if (!app.camera) {
-                    camera = new THREE.PerspectiveCamera( 45, app.ASPECT, 0.1, 1000 );
+                    camera = new THREE.PerspectiveCamera( 45, VBOT.size.aspect, 0.1, 1000 );
                     camera.position.set(5, 5, 5);
                     camera.lookAt(app.robot.position);
                     // This counters the hack used for Collada cameras
@@ -323,9 +351,8 @@
 
         function initCamera(obj) {
             if (obj.hasOwnProperty('aspect')) {
-                // We don't care what you say your aspect ratio is,
-                //  we've already sized the viewport.
-                obj.aspect = app.ASPECT;
+                // Make sure that the camera's aspect ratio matches the window shape
+                obj.aspect = VBOT.size.aspect;
                 app.camera = obj;
 
                 // I have no idea why this has to be done, but
@@ -470,8 +497,8 @@
                 {
                     left: 0,
                     bottom: 0,
-                    width: Math.floor(width / 4) * dpr,
-                    height: Math.floor(height / 4) * dpr,
+                    width: 320,
+                    height: 240,
                     camera: this.robot.camera,
                     postRender: (function () {
                         var arraySize, i, intView,
@@ -485,6 +512,8 @@
                                 arraySize = rows * cols * 4;
 
                                 VBOT.cameraData = new Uint8Array(arraySize);
+                                VBOT.cameraWidth = this.width;
+                                VBOT.cameraHeight = this.height;
 
                                 intView = new Uint32Array(VBOT.cameraData.buffer);
 
@@ -509,12 +538,25 @@
                     }())
                 }
             ];
+        
+        function resizeRenderer () {
+            width = VBOT.size.width;
+            height = VBOT.size.height;
+            views[0].width = width * dpr;
+            views[0].height = height * dpr;
+            
+            renderer.setSize(width, height);
+            
+            VBOT.camera.aspect = width / height;
+            VBOT.camera.updateProjectionMatrix();
+        }
+        window.addEventListener('resize', resizeRenderer, false);
 
         // Animate
         function run() {
             var i, left, bottom, width, height;
 
-           that.renderStats.begin();
+            that.renderStats.begin();
 
             for (i = 0; i < views.length; i += 1) {
                 left = views[i].left;
@@ -601,18 +643,14 @@
 
         return function () {
             if (!imageData) {
-                canvas.height = Math.floor(container.offsetHeight / 4) * dpr;
-                canvas.width = Math.floor(container.offsetWidth / 4) * dpr;
+                canvas.height = VBOT.cameraHeight;
+                canvas.width = VBOT.cameraWidth;
                 imageData = ctx.createImageData(canvas.width, canvas.height);
             }
 
             imageData.data.set(VBOT.cameraData);
             ctx.putImageData(imageData, 0, 0);
             ctx.scale(1, -1);
-
-            // We also need to width and height
-            VBOT.cameraWidth = canvas.width;
-            VBOT.cameraHeight = canvas.height;
         };
     }()), VBOT);
 })(this);

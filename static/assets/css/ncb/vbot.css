@@ -24,3 +24,8 @@
 	display: table;
 	margin: 0px auto 10px auto;
 }
+
+div#vbot-body canvas {
+    display: block;
+}
+
