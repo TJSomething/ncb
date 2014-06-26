@@ -16,7 +16,6 @@
 		});
 		
 		$('#mainNav a').click(function() {
-			console.log($('#vbot-body').is(':visible'));
 			if ($('#vbot-body').is(':visible')) {
 				VBOT.pause(false);
 			} else {

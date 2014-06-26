@@ -64,7 +64,7 @@ THREE.KMZLoader = function (colladaLoader) {
                     // Remove the 'models/' prefix
                     name = file.name.slice(7),
                     reader = new FileReader();
-
+                    
                 signal();
 
                 reader.onload = function () {
@@ -95,7 +95,7 @@ THREE.KMZLoader = function (colladaLoader) {
             for (imageName in textureLibrary) {
                 if (textureLibrary.hasOwnProperty(imageName)) {
                     sceneSource =
-                        sceneSource.replace(imageName,
+                        sceneSource.replace(new RegExp(imageName, 'g'),
                             textureLibrary[imageName]);
                 }
             }
