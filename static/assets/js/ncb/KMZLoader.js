@@ -11,7 +11,14 @@ THREE.KMZLoader = function (colladaLoader) {
     // Libraries
     var loader = colladaLoader || new THREE.ColladaLoader(),
         textureLibrary = {},
-        that = this;
+        that = this,
+        mimeTypes = {
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            gif: 'image/gif',
+            png: 'image/png',
+            bmp: 'image/bmp'
+        };
 
     function load (url, readyCallback) {
         var request = new XMLHttpRequest();
@@ -60,9 +67,11 @@ THREE.KMZLoader = function (colladaLoader) {
             }
 
             function loadImage(file) {
-                var blob = new Blob([file.asArrayBuffer()]),
-                    // Remove the 'models/' prefix
+                var // Remove the 'models/' prefix
                     name = file.name.slice(7),
+                    extension = name.split('.').pop().toLowerCase(),
+                    blob = new Blob([file.asArrayBuffer()],
+                        { type: mimeTypes[extension] } ),
                     reader = new FileReader();
                     
                 signal();
