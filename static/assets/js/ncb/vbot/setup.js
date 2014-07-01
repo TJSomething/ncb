@@ -460,6 +460,16 @@
                 }
             }
         }
+        
+        function initInvisible(obj) {            
+            // If the word invisible is in the object's name, then
+            // make this object and all of its children invisible
+            if (/invisible/i.test(obj.name)) {
+                obj.traverse(function (obj) {
+                    obj.visible = false;
+                });
+            }
+        }
 
         // Asynchronously prepares an object
         function initObject(obj) {
@@ -467,6 +477,7 @@
                 initCamera(obj);
                 initRobot(obj);
                 initPortable(obj);
+                initInvisible(obj);
                 addCollidable(obj);
                 fixTextures(obj);
             });
