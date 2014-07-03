@@ -53,35 +53,43 @@
                 {
                     get: (function () {
                             var c = obj.physics.boundingSphere.center,
+                                tmpC = new Vec(),
                                 // Half extents
                                 e = bWorld.max.clone().
                                     sub(bWorld.min).
                                     divideScalar(2),
                                 u = [new Vec(), new Vec(), new Vec()],
-                                mat = obj.geometry.matrixWorld;
+                                mat = obj.geometry.matrixWorld,
+                                len = 0;
 
                             return function () {
+                                // Decompose matrix into bases
+                                u[0].x = mat.elements[0];
+                                u[0].y = mat.elements[1];
+                                u[0].z = mat.elements[2];
+                                u[1].x = mat.elements[4];
+                                u[1].y = mat.elements[5];
+                                u[1].z = mat.elements[6];
+                                u[2].x = mat.elements[8];
+                                u[2].y = mat.elements[9];
+                                u[2].z = mat.elements[10];
+
+                                len = Math.sqrt(u[0].x*u[0].x + u[0].y*u[0].y + u[0].z*u[0].z);
+                                for (var i = 0; i < 3; i += 1) {
+                                    u[i].x /= len;
+                                    u[i].y /= len;
+                                    u[i].z /= len;
+                                }
+                                
+                                // Put center into global coordinates
+                                tmpC.x = c.x;
+                                tmpC.y = c.y;
+                                tmpC.z = c.z;
+                                tmpC.applyMatrix4(mat);
+                                
                                 return {
-                                    // Put center into global coordinates
-                                    c: c.clone().applyMatrix4(mat),
-                                    // Decompose matrix into bases
-                                    u: (function () {
-                                        u[0].x = mat.elements[0];
-                                        u[0].y = mat.elements[1];
-                                        u[0].z = mat.elements[2];
-                                        u[1].x = mat.elements[4];
-                                        u[1].y = mat.elements[5];
-                                        u[1].z = mat.elements[6];
-                                        u[2].x = mat.elements[8];
-                                        u[2].y = mat.elements[9];
-                                        u[2].z = mat.elements[10];
-
-                                        u[0].normalize();
-                                        u[1].normalize();
-                                        u[2].normalize();
-
-                                        return u;
-                                    }()),
+                                    c: tmpC,
+                                    u: u,
                                     e: e
                                 };
                             };
@@ -933,7 +941,8 @@
             });
 
             // We'll convert those to OBBs
-            return boxes.map(convertBox3ToOBB);
+            var result = boxes.map(convertBox3ToOBB);
+            return result;
         }
 
         // Takes a dynamic physics object and checks if it's colliding
@@ -1124,11 +1133,27 @@
 
                 // Ignore collisions with held objects
                 if (newCollision &&
-                    otherObject.physics.state !== 'held') {
+                    (newCollision.type === 'ground' ||
+                     otherObject.physics.state !== 'held')) {
+                    // If it's a horizontal collision, check if the object can be climbed
+                    if (newCollision.contactNormal.y === 0) {
+                        obj.geometry.position.y += staticCollisionResolution;
+                        obj.geometry.updateMatrixWorld();
+                        // Run collision detection again
+                        newCollision = detectCollision(obj, otherObject, type);
+                        // If it can't be climbed
+                        if (newCollision) {
+                            // Undo the climbing
+                            obj.geometry.position.y -= staticCollisionResolution;
+                        } else {
+                            return;
+                        }
+                    }
+                    // Add the displacement needed to resolve the collision
                     displacement = newCollision.contactNormal.clone().
                             multiplyScalar(newCollision.penetration);
                     obj.geometry.position.add(displacement);
-                    // If we get pushed up, neutralize speed
+                    // If we get pushed up, stop falling
                     if (displacement.y > 0) {
                         obj.physics.verticalVelocity = 0;
                     }
