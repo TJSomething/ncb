@@ -51,12 +51,8 @@
 
         // Arm manipulation
         if (methodTest(robot, [
-                'changeArmAngle',
-                'flexShoulder',
-                'adductShoulder',
-                'rotateShoulder',
-                'setArmAngle',
-                'getArmAngle'
+                'rotateArmTowards',
+                'instantPointArm'
             ])) {
             capabilities.arms = true;
         }
