@@ -925,7 +925,7 @@
 
             // Help me with visualization
             boxes.forEach(function (box) {
-                var geom = new THREE.CubeGeometry(1, 1, 1),
+                var geom = new THREE.BoxGeometry(1, 1, 1),
                     mesh = new THREE.Mesh(geom,
                                           new THREE.MeshBasicMaterial({
                                               color: 0x888888,

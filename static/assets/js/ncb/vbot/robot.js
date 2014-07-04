@@ -278,16 +278,10 @@
                 var i, camHeight, near,
                     steve = new THREE.SkinnedMesh(geometry,
                         new THREE.MeshFaceMaterial(materials)),
-                    findBoneIndex = (function () {
-                        var boneNames = steve.
-                                bones.
-                                map(function (bone) { return bone.name; });
-                        return Array.prototype.indexOf.bind(boneNames);
-                    }()),
-                    rleg = steve.bones[findBoneIndex('uleg.R')],
-                    lleg = steve.bones[findBoneIndex('uleg.L')],
-                    rarm = steve.bones[findBoneIndex('uarm.R')],
-                    larm = steve.bones[findBoneIndex('uarm.L')],
+                    rleg = steve.getObjectByName('uleg.R', true),
+                    lleg = steve.getObjectByName('uleg.L', true),
+                    rarm = steve.getObjectByName('uarm.R', true),
+                    larm = steve.getObjectByName('uarm.L', true),
                     forearmLength = 0.518,
                     armLength = forearmLength - rarm.children[0].position.y,
                     heldObjects,
@@ -420,7 +414,7 @@
             //  in the scene and won't kill accidental children
             that = new THREE.Object3D();
             that.position.copy(obj.position);
-            that.rotation = obj.rotation;
+            that.quaternion.copy(obj.quaternion);
             that.name = 'Robot Parent';
             that.app = app;
             that.app.scene.add(that);
