@@ -97,9 +97,9 @@
 
                 // We need to note that we're holding nothing
                 if (isLeft) {
-                    heldObjects.left = undefined;
+                    heldObjects.left = null;
                 } else {
-                    heldObjects.right = undefined;
+                    heldObjects.right = null;
                 }
             }
 
@@ -231,7 +231,7 @@
         };
     }
     
-    function pickUpAtHand(larm, rarm) {
+    function pickUpAtHand(larm, rarm, forearmLength) {
         return function (arm) {
             var intersectingObj,
                 i;
@@ -283,11 +283,8 @@
                     rarm = steve.getObjectByName('uarm.R', true),
                     larm = steve.getObjectByName('uarm.L', true),
                     forearmLength = 0.518,
-                    armLength = forearmLength - rarm.children[0].position.y,
-                    heldObjects,
-                    scale = 2/3,
-                    lArmAngularVelocity = 0,
-                    rArmAngularVelocity = 0;
+                    heldObjects = {right: null, left: null},
+                    scale = 2/3;
 
                 // For some weird reason, Steve is the wrong size.
                 steve.scale.set(scale, scale, scale);
@@ -338,7 +335,88 @@
                 obj.rotateArmTowards = rotateArmTowards(larm, rarm);
                 
                 // Picks up the object that's in the hand, if there is one
-                obj.pickUpAtHand = pickUpAtHand(larm, rarm);
+                obj.pickUpAtHand = pickUpAtHand(larm, rarm, forearmLength);
+                
+                Object.defineProperties(obj, {
+                       leftHandObject: {
+                               get: function () {
+                                       return heldObjects.left;
+                               }
+                       },
+                       rightHandObject: {
+                               get: function () {
+                                       return heldObjects.right;
+                               }
+                       }
+                });
+
+                obj.app.fire('robot-ready');
+            });
+        }
+        
+        function loadCarl(obj) {
+            var loader = new THREE.JSONLoader(true);
+            loader.load('assets/json/carl.js', function (geometry, materials) {
+                var i, camHeight, near,
+                    carl = new THREE.SkinnedMesh(geometry,
+                        new THREE.MeshFaceMaterial(materials)),
+                    scale = 0.01,
+                    rleg = carl.getObjectByName('Carl:RightUpLeg', true),
+                    lleg = carl.getObjectByName('Carl:LeftUpLeg', true),
+                    rarm = carl.getObjectByName('Carl:RightArm', true),
+                    larm = carl.getObjectByName('Carl:LeftArm', true),
+                    lhand = carl.getObjectByName('Carl:LeftHand', true),
+                    forearmLength = lhand.position.length(),
+                    heldObjects = {right: null, left: null};
+
+                // Why is it in centimeters?
+                carl.scale.set(scale, scale, scale);
+
+                obj.add(carl);
+                obj.app.physics.addObject(obj,
+                    {
+                        type: 'dynamic',
+                        state: 'controlled'
+                    });
+
+                for (i = 0; i < materials.length; i += 1) {
+                    // For bones
+                    materials[i].skinning = true;
+                }
+                
+                // Move the arms down
+                larm.rotateZ(-Math.PI/2);
+                rarm.rotateZ(Math.PI/2);
+
+                // Place a camera in the robot
+                // Find the bounding box
+                obj.bounds = (new THREE.Box3()).setFromObject(carl);
+                // The camera should be at eye level
+                camHeight = 0.95 * obj.bounds.max.y;
+                // The near clipping plane should be a little further out
+                //  than the front
+                near = 1.01 * obj.bounds.max.z;
+                // Make our camera
+                obj.camera = new THREE.PerspectiveCamera(45, 4 / 3, near, 1000);
+                obj.camera.position.set(0, camHeight, 0);
+                obj.camera.rotateY(Math.PI); // Otherwise, it'll point backward
+                obj.add(obj.camera);
+
+                // Add walking
+                obj.animateWalking = animateWalking(lleg, rleg, Math.PI/9);
+
+                // This anchors an object to the nearest arm
+                obj.grab = grab(larm, rarm);
+
+                // This removes the target from the arm
+                obj.release = release(heldObjects);
+
+                obj.instantPointArm = instantPointArm(obj);
+
+                obj.rotateArmTowards = rotateArmTowards(larm, rarm);
+                
+                // Picks up the object that's in the hand, if there is one
+                obj.pickUpAtHand = pickUpAtHand(larm, rarm, forearmLength);
                 
                 Object.defineProperties(obj, {
                        leftHandObject: {
@@ -394,7 +472,8 @@
 
         var modelLoaders = {
             mouse: loadMouse,
-            steve: loadSteve
+            steve: loadSteve,
+            carl: loadCarl
         };
 
 
