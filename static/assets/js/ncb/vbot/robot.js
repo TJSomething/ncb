@@ -403,7 +403,35 @@
                 obj.add(obj.camera);
 
                 // Add walking
-                obj.animateWalking = animateWalking(lleg, rleg, Math.PI/9);
+                obj.animateWalking = (function (rleg, lleg, maxLegAngle) {
+                    var walkState = 0,
+                        lrleg = rleg.children[0],
+                        llleg = lleg.children[0],
+                        lankle = llleg.children[0],
+                        rankle = lrleg.children[0];
+
+                    return function (ds, dtheta) {
+                        // Don't let undefined through
+                        ds = ds || 0;
+                        dtheta = dtheta || 0;
+
+                        // Change our walk state
+                        walkState += ds;
+
+                        rleg.rotation.x =
+                            maxLegAngle * Math.sin(walkState / maxLegAngle);
+                        lleg.rotation.x =
+                            -maxLegAngle * Math.sin(walkState / maxLegAngle);
+                        lrleg.rotation.x = maxLegAngle -
+                            maxLegAngle * Math.cos(walkState / maxLegAngle);
+                        llleg.rotation.x = maxLegAngle +
+                            maxLegAngle * Math.cos(walkState / maxLegAngle);;
+                        rankle.rotation.x = -maxLegAngle/2 +
+                            maxLegAngle/2 * Math.cos(walkState / maxLegAngle);
+                        lankle.rotation.x = -maxLegAngle/2 -
+                            maxLegAngle/2 * Math.cos(walkState / maxLegAngle);
+                    };
+                }(rleg, lleg, Math.PI/9));
 
                 // This anchors an object to the nearest arm
                 obj.grab = grab(larm, rarm);
