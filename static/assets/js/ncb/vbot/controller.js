@@ -287,7 +287,7 @@
                 target = VBOT.scene.getObjectByName(action.objName, true);
                 // Target location in local space
                 targetLoc = VBOT.robot.worldToLocal(
-                    target.positionWorld());
+                    target.centerWorld());
                 remainingAngle = Math.atan2(targetLoc.x, targetLoc.z);
                 // Calculate how much we need to turn
                 if (action.hasOwnProperty('speed')) {

@@ -122,7 +122,7 @@
         };
     }
     
-    function rotateArmTowards(larm, rarm) {
+    function rotateArmTowards(larm, rarm, leftDefaultUpVector, rightDefaultUpVector) {
         /**
          * Rotates an arm toward pointing at a location
          *
@@ -140,8 +140,7 @@
                 armObj = isLeft ? larm : rarm,
                 localMatrix = new THREE.Matrix4(),
                 shoulderLoc = armObj.positionWorld(),
-                shoulderDisplacement = shoulderLoc.clone().sub(obj.positionWorld()),
-                direction = new THREE.Vector3(0, -1, 0),
+                shoulderDisplacement = shoulderLoc.clone().sub(this.positionWorld()),
                 thirdBasis = new THREE.Vector3(),
                 rotMatrix,
                 angleDiff,
@@ -150,7 +149,7 @@
             // Don't want to mangle the formal parameters
             targetVector = targetVector.clone();
 
-            localMatrix.getInverse(obj.matrixWorld);
+            localMatrix.getInverse(this.matrixWorld);
 
             // isGlobal defaults to false
             if (isGlobal === undefined) {
@@ -160,8 +159,8 @@
             // I've found that you get the most intuitive motion if you
             // have up be up and out for the arm
             if (upVector === undefined) {
-                upVector = new THREE.Vector3(isLeft ? -1 : 1,
-                    isLeft ? 1 : -1, 0);
+                upVector = isLeft ? leftDefaultUpVector.clone() :
+                                    rightDefaultUpVector.clone();
             } else {
                 upVector = upVector.clone();
             }
@@ -231,7 +230,7 @@
         };
     }
     
-    function pickUpAtHand(larm, rarm, forearmLength) {
+    function pickUpAtHand(larm, rarm, heldObjects, calculateHandLocation) {
         return function (arm) {
             var intersectingObj,
                 i;
@@ -239,23 +238,22 @@
             function checkHandCollision(arm, target) {
                 var isRight = arm[0] === 'r' || arm[0] === 'R',
                     armObj = isRight ? rarm : larm,
-                    handLocation = new THREE.Vector3(0, -forearmLength, 0).
-                        applyMatrix4(armObj.children[0].matrixWorld),
+                    handLocation = calculateHandLocation(armObj),
                     targetBox = new THREE.Box3().setFromObject(target);
 
                     return targetBox.containsPoint(handLocation);
             }
 
             // Find an object that's intesecting with the hand
-            for (i = 0; i < obj.app.portables.length; i += 1) {
-                if (checkHandCollision(arm, obj.app.portables[i])) {
-                    intersectingObj = obj.app.portables[i];
+            for (i = 0; i < VBOT.portables.length; i += 1) {
+                if (checkHandCollision(arm, VBOT.portables[i])) {
+                    intersectingObj = VBOT.portables[i];
                     break;
                 }
             }
 
             if (intersectingObj !== undefined) {
-                obj.grab(intersectingObj, arm);
+                this.grab(intersectingObj, arm);
 
                 if (arm[0] === 'l' || arm[0] === 'L') {
                     heldObjects.left = intersectingObj;
@@ -332,10 +330,14 @@
 
                 obj.instantPointArm = instantPointArm(obj);
 
-                obj.rotateArmTowards = rotateArmTowards(larm, rarm);
+                obj.rotateArmTowards = rotateArmTowards(larm, rarm, new THREE.Vector3(1, -1, 0), new THREE.Vector3(1, -1, 0));
                 
                 // Picks up the object that's in the hand, if there is one
-                obj.pickUpAtHand = pickUpAtHand(larm, rarm, forearmLength);
+                function calculateHandLocation(armObj) {
+                    return new THREE.Vector3(0, -forearmLength, 0).
+                        applyMatrix4(armObj.children[0].matrixWorld)
+                }
+                obj.pickUpAtHand = pickUpAtHand(larm, rarm, heldObjects, calculateHandLocation);
                 
                 Object.defineProperties(obj, {
                        leftHandObject: {
@@ -408,28 +410,52 @@
                         lrleg = rleg.children[0],
                         llleg = lleg.children[0],
                         lankle = llleg.children[0],
-                        rankle = lrleg.children[0];
+                        rankle = lrleg.children[0],
+                        legAngle = 0,
+                        lastDs = 0;
 
-                    return function (ds, dtheta) {
+                    return function (ds, dtheta) {                        
                         // Don't let undefined through
                         ds = ds || 0;
                         dtheta = dtheta || 0;
+                       
+                        // If we just started walking, slowly increase our stride
+                        if (Math.abs(ds) > 0) {
+                            // Remember the current walking rate as a approximation
+                            // of speed, which we use to figure out deceleration
+                            // speed
+                            lastDs = Math.abs(ds);
+                            
+                            if (legAngle + lastDs < maxLegAngle) {
+                                legAngle += lastDs;
+                            } else {
+                                legAngle = maxLegAngle;
+                            }
+                        } else if (Math.abs(dtheta) === 0) {
+                            if (legAngle - lastDs > 0) {
+                                legAngle -= lastDs;
+                            } else {
+                                legAngle = 0;
+                                walkState = 0;
+                            }
+                        }
 
                         // Change our walk state
                         walkState += ds;
 
+                        var stride = legAngle/maxLegAngle;
                         rleg.rotation.x =
-                            maxLegAngle * Math.sin(walkState / maxLegAngle);
+                            stride * maxLegAngle * Math.sin(walkState / maxLegAngle);
                         lleg.rotation.x =
-                            -maxLegAngle * Math.sin(walkState / maxLegAngle);
-                        lrleg.rotation.x = maxLegAngle -
-                            maxLegAngle * Math.cos(walkState / maxLegAngle);
-                        llleg.rotation.x = maxLegAngle +
-                            maxLegAngle * Math.cos(walkState / maxLegAngle);;
-                        rankle.rotation.x = -maxLegAngle/2 +
-                            maxLegAngle/2 * Math.cos(walkState / maxLegAngle);
-                        lankle.rotation.x = -maxLegAngle/2 -
-                            maxLegAngle/2 * Math.cos(walkState / maxLegAngle);
+                            stride * -maxLegAngle * Math.sin(walkState / maxLegAngle);
+                        lrleg.rotation.x = stride * (maxLegAngle -
+                            maxLegAngle * Math.cos(walkState / maxLegAngle));
+                        llleg.rotation.x = stride * (maxLegAngle +
+                            maxLegAngle * Math.cos(walkState / maxLegAngle));
+                        rankle.rotation.x = stride * (-maxLegAngle/2 +
+                            maxLegAngle/2 * Math.cos(walkState / maxLegAngle));
+                        lankle.rotation.x = stride * (-maxLegAngle/2 -
+                            maxLegAngle/2 * Math.cos(walkState / maxLegAngle));
                     };
                 }(rleg, lleg, Math.PI/9));
 
@@ -441,10 +467,106 @@
 
                 obj.instantPointArm = instantPointArm(obj);
 
-                obj.rotateArmTowards = rotateArmTowards(larm, rarm);
+                obj.rotateArmTowards = function (arm, targetVector, amount, inRadians, isGlobal, upVector) {
+            var isLeft = arm[0] === 'l' || arm[0] === 'L',
+                armObj = isLeft ? larm : rarm,
+                localMatrix = new THREE.Matrix4(),
+                shoulderLoc = armObj.positionWorld(),
+                shoulderDisplacement = shoulderLoc.clone().sub(this.positionWorld()),
+                thirdBasis = new THREE.Vector3(),
+                rotMatrix,
+                angleDiff,
+                s;
+
+            // Don't want to mangle the formal parameters
+            targetVector = targetVector.clone();
+
+            localMatrix.getInverse(this.matrixWorld);
+
+            // isGlobal defaults to false
+            if (isGlobal === undefined) {
+                isGlobal = false;
+            }
+
+            // I've found that you get the most intuitive motion if you
+            // have up be up and out for the arm
+            if (upVector === undefined) {
+                upVector = new THREE.Vector3(isLeft? 1 : -1,
+                    0, 0);
+            } else {
+                upVector = upVector.clone();
+            }
+
+            // Convert the targetVector into local space, if needed
+            if (isGlobal) {
+                targetVector.
+                    sub(shoulderDisplacement).
+                    applyMatrix4(localMatrix);
+            }
+            targetVector.
+                multiplyScalar(-1);
+
+            targetVector.normalize();
+            upVector.normalize();
+
+            // For a rotation we need three bases
+            thirdBasis.crossVectors(targetVector, upVector).
+                normalize();
+
+            // Also, force the up vector to be perpendicular to the target
+            // vector
+            upVector.crossVectors(targetVector, thirdBasis).
+                normalize();
+
+            // Make a rotation matrix
+            var t = targetVector,
+                u = upVector,
+                v = thirdBasis;
+            rotMatrix = new THREE.Matrix4(
+                t.x, v.x, u.x, 0,
+                t.y, v.y, u.y, 0,
+                t.z, v.z, u.z, 0,
+                0,   0,    0,   1
+            );
+
+            // Make a quaternion to rotate to
+            var q1 = armObj.quaternion,
+                q2 = new THREE.Quaternion();
+            q2.setFromRotationMatrix(rotMatrix);
+
+            // If the amount to rotate is in radians, we need to convert to
+            // amount of arc to rotate by in order use SLERP
+            if (inRadians) {
+                s = q1.w * q2.w +
+                    q1.x * q2.x +
+                    q1.y * q2.y +
+                    q1.z * q2.z;
+                angleDiff = 2 * Math.acos(Math.abs(s));
+                amount = amount/angleDiff;
+            }
+
+            // Prevent overshoot
+            if (amount > 1) {
+                amount = 1;
+            }
+
+            // Rotate the stuff
+            armObj.quaternion.slerp(q2, amount);
+
+            // If it's done moving, then let's say that
+            if (amount === 1) {
+                return true;
+            } else {
+                return false;
+            }
+        };
                 
                 // Picks up the object that's in the hand, if there is one
-                obj.pickUpAtHand = pickUpAtHand(larm, rarm, forearmLength);
+                function calculateHandLocation(armObj) {
+                    return armObj.children[0].children[0].children[0].positionWorld();
+                }
+                
+                obj.pickUpAtHand = pickUpAtHand(larm, rarm, heldObjects, calculateHandLocation);
                 
                 Object.defineProperties(obj, {
                        leftHandObject: {
