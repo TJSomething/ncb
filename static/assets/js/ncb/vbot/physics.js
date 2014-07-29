@@ -25,31 +25,16 @@
                     getInverse(obj.geometry.matrixWorld),
                 // In local coordinates
                 b = bWorld.clone().applyMatrix4(invMatrixWorld);
-
-            // We're really going to be doing to do collisions with the
-            //  bounding box
-            obj.physics.collisionVertices =
-               [new Vec( b.min.x, b.min.y, b.min.z ),
-                new Vec( b.min.x, b.min.y, b.max.z ),
-                new Vec( b.min.x, b.max.y, b.min.z ),
-                new Vec( b.min.x, b.max.y, b.max.z ),
-                new Vec( b.max.x, b.min.y, b.min.z ),
-                new Vec( b.max.x, b.min.y, b.max.z ),
-                new Vec( b.max.x, b.max.y, b.min.z ),
-                new Vec( b.max.x, b.max.y, b.max.z )];
-
-            obj.physics.boundingSphere =
+                
+            var boundingSphere =
                 b.getBoundingSphere();
 
-            Object.defineProperty(obj.physics, 'boundingSphereWorld',
-                {
-                    get: function() {
+            var calcBoundingSphereWorld = function() {
                         return obj.physics.boundingSphere.clone().
                             applyMatrix4(obj.geometry.matrixWorld);
-                    }
-                });
+                    };
 
-            Object.defineProperty(obj.physics, 'orientedBoundingBox',
+            Object.defineProperty(obj.physics, 'obbs',
                 {
                     get: (function () {
                             var c = obj.physics.boundingSphere.center,
@@ -87,11 +72,11 @@
                                 tmpC.z = c.z;
                                 tmpC.applyMatrix4(mat);
                                 
-                                return {
+                                return [{
                                     c: tmpC,
                                     u: u,
                                     e: e
-                                };
+                                }];
                             };
                         }())
                 });
@@ -108,32 +93,6 @@
                 aabbWorld = (new THREE.Box3()).setFromObject(obj.geometry);
 
             obj.physics.faces = getGlobalFaces(obj);
-            obj.physics.boundingSphereWorld =
-                new THREE.Sphere().setFromPoints(
-                    obj.geometry.geometry.vertices);
-            obj.physics.boundingSphereWorld.applyMatrix4(mat);
-
-            obj.physics.orientedBoundingBox = {
-                c: obj.physics.boundingSphereWorld.center,
-                u: (function () {
-                        var x = new Vec(mat.elements[0],
-                                        mat.elements[1],
-                                        mat.elements[2]),
-                            y = new Vec(mat.elements[4],
-                                        mat.elements[5],
-                                        mat.elements[6]),
-                            z = new Vec(mat.elements[8],
-                                        mat.elements[9],
-                                        mat.elements[10]);
-
-                        return [x.normalize(),
-                                y.normalize(),
-                                z.normalize()];
-                    }()),
-                e: aabbWorld.max.clone().
-                             sub(aabbWorld.min).
-                             divideScalar(2)
-            };
 
             obj.physics.obbs = buildObjectOBBs(obj, staticCollisionResolution);
 
@@ -243,6 +202,7 @@
                 t = new THREE.Vector3(),
                 // Putting these into arrays for for-loops
                 tArr,
+
                 ae = [a.e.x, a.e.y, a.e.z],
                 be = [b.e.x, b.e.y, b.e.z],
                 axisDist,
@@ -952,8 +912,8 @@
             // Prevent self testing
             if (obj1 !== obj2) {
                 // Oriented bounding box check
-                collision = testOBBOBB(obj1.physics.orientedBoundingBox,
-                        obj2.physics.orientedBoundingBox);
+                collision = testOBBOBB(obj1.physics.obbs[0],
+                        obj2.physics.obbs[0]);
                 if (collision) {
                     collision.otherObject = obj2.geometry;
                     collision.type = 'dynamic';
@@ -977,12 +937,9 @@
                 for (i = 0; i < obj2.physics.obbs.length; i += 1) {
                     obb = obj2.physics.obbs[i];
                     // Oriented bounding box check
-                    collision = testOBBOBB(obj1.physics.orientedBoundingBox,
+                    collision = testOBBOBB(obj1.physics.obbs[0],
                             obb);
                     if (collision) {
-                        if (obj1.geometry.name === 'portable_table') {
-                            //console.log(collision.contactNormal.z);
-                        }
                         collision.otherObject = obj2.geometry;
                         collision.type = 'static';
                         if (collision.penetration > bestCollision.penetration) {
@@ -1023,7 +980,7 @@
         }
 
         function detectGroundCollision(obj) {
-            var collision = testOBBGround(obj.physics.orientedBoundingBox, groundElevation);
+            var collision = testOBBGround(obj.physics.obbs[0], groundElevation);
             if (collision) {
                 collision.type = 'ground';
             }
