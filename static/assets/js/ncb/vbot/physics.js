@@ -37,7 +37,7 @@
             Object.defineProperty(obj.physics, 'obbs',
                 {
                     get: (function () {
-                            var c = obj.physics.boundingSphere.center,
+                            var c = boundingSphere.center,
                                 tmpC = new Vec(),
                                 // Half extents
                                 e = bWorld.max.clone().
@@ -904,55 +904,36 @@
             var result = boxes.map(convertBox3ToOBB);
             return result;
         }
-
-        // Takes a dynamic physics object and checks if it's colliding
-        //  with another dynamic physics object
-        function detectDynamicCollision(obj1, obj2) {
-            var collision;
-            // Prevent self testing
-            if (obj1 !== obj2) {
-                // Oriented bounding box check
-                collision = testOBBOBB(obj1.physics.obbs[0],
-                        obj2.physics.obbs[0]);
-                if (collision) {
-                    collision.otherObject = obj2.geometry;
-                    collision.type = 'dynamic';
-                    return collision;
-                }
-            }
-
-            return false;
-        }
-
-        // Detects a collision between a dynamic object and
-        // a static object
-        function detectSingleStaticCollision (obj1, obj2) {
-            var collision, bestCollision = {
+        
+        function detectSingleCollision(obj1, obj2) {
+            var collision, i, j,
+                bestCollision = {
                     penetration: -Infinity
                 },
-                i,
-                obb;
+                obbs1 = obj1.physics.obbs,
+                obbs2 = obj2.physics.obbs;
+            
             // Prevent self testing
             if (obj1 !== obj2) {
-                for (i = 0; i < obj2.physics.obbs.length; i += 1) {
-                    obb = obj2.physics.obbs[i];
-                    // Oriented bounding box check
-                    collision = testOBBOBB(obj1.physics.obbs[0],
-                            obb);
-                    if (collision) {
-                        collision.otherObject = obj2.geometry;
-                        collision.type = 'static';
-                        if (collision.penetration > bestCollision.penetration) {
-                            bestCollision = collision;
+                for (i = 0; i < obbs1.length; i += 1) {
+                    for (j = 0; j < obbs2.length; j += 1) {
+                        collision = testOBBOBB(obbs1[i], obbs2[j]);
+                        if (collision) {
+                            collision.otherObject = obj2.geometry;
+                            collision.type = obj2.physics.type;
+                            
+                            if (collision.penetration > bestCollision.penetration) {
+                                bestCollision = collision;
+                            }
                         }
                     }
                 }
-
+                
                 if (bestCollision.penetration > 0) {
                     return bestCollision;
                 }
             }
-
+            
             return false;
         }
 
@@ -964,7 +945,7 @@
                 //  this object's bounding box
                 totalCollisions =
                     staticObjects.reduce(function (collisions, obj2) {
-                        collision = detectSingleStaticCollision(obj, obj2);
+                        collision = detectSingleCollision(obj, obj2);
                         if (collision) {
                             collisions.push(collision);
                         }
@@ -1023,7 +1004,7 @@
 
                 // Test against dynamic objects
                 for (j = 0; j < dynamicObjects.length; j += 1) {
-                    collision = detectDynamicCollision(dynamicObjects[i],
+                    collision = detectSingleCollision(dynamicObjects[i],
                                                dynamicObjects[j]);
                     if (collision) {
                         dynamicObjects[i].geometry.collisions.push(collision);
@@ -1072,10 +1053,8 @@
         }
 
         function detectCollision(obj1, obj2, type) {
-            if (type === 'static') {
-                return detectSingleStaticCollision(obj1, obj2);
-            } else if (type === 'dynamic') {
-                return detectDynamicCollision(obj1, obj2);
+            if (type === 'static' || type === 'dynamic') {
+                return detectSingleCollision(obj1, obj2);
             } else if (type === 'ground') {
                 return detectGroundCollision(obj1);
             } else {
