@@ -17,6 +17,144 @@
             staticCollisionResolution = 0.1,
             collisionVolumeObjects = new THREE.Object3D(),
             groundElevation = Infinity;
+            
+        /** Creates an OBB
+         *
+         * @param center THREE.Vector3 the center
+         * @param bases [THREE.Vector3] an array of the bases, which determine the
+         *                              rotation of the OBB
+         * @param halfExtents [number] an array of the half-lengths of each dimension
+         *                             of the OBB
+         * @param parent THREE.Object3D the parent of this OBB
+         */
+        function makeOBB(center, bases, halfExtents, parent) {
+            var obb = {};
+            var rotMatrix =
+                new THREE.Matrix4(bases[0].x, bases[1].x, bases[2].x, 0,
+                                  bases[0].y, bases[1].y, bases[2].y, 0,
+                                  bases[0].z, bases[1].z, bases[2].z, 0,
+                                           0,          0,          0, 1);
+            var c,
+                u = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+            var parentMemo = new THREE.Matrix4();
+            var mat = new THREE.Matrix4();
+            var len;
+            var pMat = parent.matrixWorld.elements;
+            // Calculate the length of each basis in scaling the extents into world space
+            var basisLengths = [Math.sqrt(pMat[0]*pMat[0] + pMat[1]*pMat[1] + pMat[2]*pMat[2]),
+                                Math.sqrt(pMat[4]*pMat[4] + pMat[5]*pMat[5] + pMat[6]*pMat[6]),
+                                Math.sqrt(pMat[8]*pMat[8] + pMat[9]*pMat[9] + pMat[10]*pMat[10])];
+            var scaledExtents = new THREE.Vector3(
+                                    halfExtents[0]*basisLengths[0],
+                                    halfExtents[1]*basisLengths[1],
+                                    halfExtents[2]*basisLengths[2]);
+
+
+            function matrix4Equals(mat1, mat2) {
+                for (var i = 0; i < 16; i += 1) {
+                    if (mat1.elements[i] !== mat2.elements[i]) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            function update() {
+                if (!matrix4Equals(parent.matrixWorld, parentMemo)) {
+                    c = center.clone().applyMatrix4(parent.matrixWorld);
+
+                    mat.multiplyMatrices(parent.matrixWorld, rotMatrix);
+                    u[0].x = mat.elements[0];
+                    u[0].y = mat.elements[1];
+                    u[0].z = mat.elements[2];
+                    u[1].x = mat.elements[4];
+                    u[1].y = mat.elements[5];
+                    u[1].z = mat.elements[6];
+                    u[2].x = mat.elements[8];
+                    u[2].y = mat.elements[9];
+                    u[2].z = mat.elements[10];
+
+                    len = Math.sqrt(u[0].x*u[0].x + u[0].y*u[0].y + u[0].z*u[0].z);
+                    for (var i = 0; i < 3; i += 1) {
+                        u[i].x /= len;
+                        u[i].y /= len;
+                        u[i].z /= len;
+                    }
+
+                    parentMemo.copy(parent.matrixWorld);
+                }
+            }
+
+            Object.defineProperty(obb, 'c',
+                {
+                    get: function() {
+                             update();
+                             return c;
+                         }
+                });
+            Object.defineProperty(obb, 'e',
+                {
+                    get: function() {
+                             return scaledExtents;
+                         }
+                });
+            Object.defineProperty(obb, 'u',
+                {
+                    get: function() {
+                             update();
+                             return u;
+                         }
+                });
+            Object.defineProperty(obb, 'update',
+                {
+                    value: update
+                });
+
+            return obb;
+        }
+
+        function OBBHelper(obb) {
+            var boundingBox = new THREE.Mesh(
+                    new THREE.BoxGeometry(1, 1, 1),
+                    new THREE.MeshBasicMaterial({
+                        color: 0x888888,
+                        wireframe: true
+                    })),
+                originalUpdate = boundingBox.updateMatrixWorld.bind(boundingBox);
+
+            function updateOBB() {
+                // scale
+                var sc = obb.e;
+                // bases
+                var E = [[obb.u[0].x, obb.u[1].x, obb.u[2].x],
+                         [obb.u[0].y, obb.u[1].y, obb.u[2].y],
+                         [obb.u[0].z, obb.u[1].z, obb.u[2].z]];
+                // center
+                var p = obb.c;
+
+                var mat = new THREE.Matrix4(sc[0] * E[0][0], sc[1] * E[0][1], sc[2] * E[0][2], p.x,
+                                            sc[0] * E[1][0], sc[1] * E[1][1], sc[2] * E[1][2], p.y,
+                                            sc[0] * E[2][0], sc[1] * E[2][1], sc[2] * E[2][2], p.z,
+                                            0,               0,               0,               1);
+
+                boundingBox.matrix.copy(mat);
+            }
+
+            // Make it so that updating the matrixWorld updates the OBB
+            boundingBox.updateMatrixWorld = function(force) {
+                updateOBB();
+                originalUpdate(force);
+                boundingBox.matrixWorldNeedsUpdate = true;
+            }
+
+            // We're not going to use position, quaternion, and scale
+            boundingBox.matrixAutoUpdate = false;
+
+            updateOBB();
+            originalUpdate(true);
+
+            return boundingBox;
+        }
 
         function initDynamicObject(obj) {
             var bWorld = (new THREE.Box3()).setFromObject(obj.geometry),
@@ -33,54 +171,24 @@
                         return obj.physics.boundingSphere.clone().
                             applyMatrix4(obj.geometry.matrixWorld);
                     };
+                    
+            obj.physics.obbs =
+                [function () {
+                    var c = boundingSphere.center,
+                        tmpC = new Vec(),
+                        // Half extents
+                        e = bWorld.max.clone().
+                            sub(bWorld.min).
+                            divideScalar(2),
+                        u = [new Vec(1, 0, 0),
+                             new Vec(0, 1, 0),
+                             new Vec(0, 0, 1)],
+                        mat = obj.geometry.matrixWorld,
+                        len = 0;
 
-            Object.defineProperty(obj.physics, 'obbs',
-                {
-                    get: (function () {
-                            var c = boundingSphere.center,
-                                tmpC = new Vec(),
-                                // Half extents
-                                e = bWorld.max.clone().
-                                    sub(bWorld.min).
-                                    divideScalar(2),
-                                u = [new Vec(), new Vec(), new Vec()],
-                                mat = obj.geometry.matrixWorld,
-                                len = 0;
-
-                            return function () {
-                                // Decompose matrix into bases
-                                u[0].x = mat.elements[0];
-                                u[0].y = mat.elements[1];
-                                u[0].z = mat.elements[2];
-                                u[1].x = mat.elements[4];
-                                u[1].y = mat.elements[5];
-                                u[1].z = mat.elements[6];
-                                u[2].x = mat.elements[8];
-                                u[2].y = mat.elements[9];
-                                u[2].z = mat.elements[10];
-
-                                len = Math.sqrt(u[0].x*u[0].x + u[0].y*u[0].y + u[0].z*u[0].z);
-                                for (var i = 0; i < 3; i += 1) {
-                                    u[i].x /= len;
-                                    u[i].y /= len;
-                                    u[i].z /= len;
-                                }
-                                
-                                // Put center into global coordinates
-                                tmpC.x = c.x;
-                                tmpC.y = c.y;
-                                tmpC.z = c.z;
-                                tmpC.applyMatrix4(mat);
-                                
-                                return [{
-                                    c: tmpC,
-                                    u: u,
-                                    e: e
-                                }];
-                            };
-                        }())
-                });
-
+                    return makeOBB(c, u, e.toArray(), obj.geometry);
+                }()];
+                
             obj.physics.verticalVelocity = obj.physics.verticalVelocity || 0;
 
             dynamicObjects.push(obj);
@@ -175,7 +283,7 @@
 
             position = obj.geometry.positionWorld();
             quaternion = obj.geometry.quaternion;
-
+            
             obj.physics.position = position;
             obj.physics.quaternion = quaternion;
         }
@@ -194,6 +302,10 @@
         }
 
         function testOBBOBB(a, b) {
+            // Compute the OBBs at this time
+            a = {c: a.c, u: a.u, e: a.e};
+            b = {c: b.c, u: b.u, e: b.e};
+            
             var ra = 0,
                 rb = 0,
                 R = {elements: new Float32Array(9)},
@@ -919,11 +1031,13 @@
                     for (j = 0; j < obbs2.length; j += 1) {
                         collision = testOBBOBB(obbs1[i], obbs2[j]);
                         if (collision) {
-                            collision.otherObject = obj2.geometry;
-                            collision.type = obj2.physics.type;
-                            
-                            if (collision.penetration > bestCollision.penetration) {
-                                bestCollision = collision;
+                            if (collision.penetration !== Infinity) {
+                                collision.otherObject = obj2.geometry;
+                                collision.type = obj2.physics.type;
+
+                                if (collision.penetration > bestCollision.penetration) {
+                                    bestCollision = collision;
+                                }
                             }
                         }
                     }
@@ -1089,6 +1203,7 @@
                     displacement = newCollision.contactNormal.clone().
                             multiplyScalar(newCollision.penetration);
                     obj.geometry.position.add(displacement);
+                    
                     // If we get pushed up, stop falling
                     if (displacement.y > 0) {
                         obj.physics.verticalVelocity = 0;
