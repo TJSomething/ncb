@@ -109,6 +109,17 @@
                 {
                     value: update
                 });
+            Object.defineProperty(obb, 'clone',
+                {
+                    value: function () {
+                        update();
+                        return {
+                                c: this.c,
+                                e: this.e,
+                                u: this.u
+                            };
+                    }
+                });
 
             return obb;
         }
@@ -172,22 +183,26 @@
                             applyMatrix4(obj.geometry.matrixWorld);
                     };
                     
-            obj.physics.obbs =
-                [function () {
-                    var c = boundingSphere.center,
-                        tmpC = new Vec(),
-                        // Half extents
-                        e = bWorld.max.clone().
-                            sub(bWorld.min).
-                            divideScalar(2),
-                        u = [new Vec(1, 0, 0),
-                             new Vec(0, 1, 0),
-                             new Vec(0, 0, 1)],
-                        mat = obj.geometry.matrixWorld,
-                        len = 0;
+            if (obj.physics.state === "controlled") {
+                obj.physics.obbs = buildRobotOBBs(obj.geometry)
+            } else {
+                obj.physics.obbs =
+                    [function () {
+                        var c = boundingSphere.center,
+                            tmpC = new Vec(),
+                            // Half extents
+                            e = b.max.clone().
+                                sub(b.min).
+                                divideScalar(2),
+                            u = [new Vec(1, 0, 0),
+                                 new Vec(0, 1, 0),
+                                 new Vec(0, 0, 1)],
+                            mat = obj.geometry.matrixWorld,
+                            len = 0;
 
-                    return makeOBB(c, u, e.toArray(), obj.geometry);
-                }()];
+                        return makeOBB(c, u, e.toArray(), obj.geometry);
+                    }()];
+            }
                 
             obj.physics.verticalVelocity = obj.physics.verticalVelocity || 0;
 
@@ -302,11 +317,13 @@
         }
 
         function testOBBOBB(a, b) {
-            // Compute the OBBs at this time
-            a = {c: a.c, u: a.u, e: a.e};
-            b = {c: b.c, u: b.u, e: b.e};
-            
-            var ra = 0,
+            // Put all of the OBB properties in nice locations
+            var ac = a.c, bc = b.c,
+                ae = a.e.toArray(), be = b.e.toArray(),
+                au = a.u, bu = b.u,
+                aeLength = Math.sqrt(ae[0]*ae[0] + ae[1]*ae[1] + ae[2]*ae[2]),
+                beLength = Math.sqrt(be[0]*be[0] + be[1]*be[1] + be[2]*be[2]),
+                ra = 0,
                 rb = 0,
                 R = {elements: new Float32Array(9)},
                 AbsR = {elements: new Float32Array(9)},
@@ -314,27 +331,32 @@
                 t = new THREE.Vector3(),
                 // Putting these into arrays for for-loops
                 tArr,
-
-                ae = [a.e.x, a.e.y, a.e.z],
-                be = [b.e.x, b.e.y, b.e.z],
                 axisDist,
                 penetration = Infinity,
                 normal = new THREE.Vector3();
+            
+            // Before anything else, test bounding spheres
+            // Compute translation vector t
+            t.subVectors(bc, ac);
+            // If the distance between the centers of the boxes
+            // is greater than the sum of the lengths of the extents,
+            // then the boxes can't intersect
+            if (t.length() > aeLength + beLength) {
+                return false;
+            }
 
             // Compute rotation matrix expressing b in a's coordinate frame
             for (i = 0; i < 3; i += 1) {
                 for (j = 0; j < 3; j += 1) {
-                    R.elements[3 * j + i] = dot(a.u[i], b.u[j]);
+                    R.elements[3 * j + i] = dot(au[i], bu[j]);
                 }
             }
 
-            // Compute translation vector t
-            t.subVectors(b.c, a.c);
             // Bring translation into a's coordinate frame
             t = new THREE.Vector3(
-                dot(t, a.u[0]),
-                dot(t, a.u[1]),
-                dot(t, a.u[2]));
+                dot(t, au[0]),
+                dot(t, au[1]),
+                dot(t, au[2]));
             tArr = [t.x, t.y, t.z];
 
             // Compute common subexpressions. Add in an epsilon term to
@@ -542,7 +564,7 @@
             // Rotate our normal into the first object's rotation
             for (i = 0; i < 3; i += 1) {
                 for (j = 0; j < 3; j += 1) {
-                    R.elements[3 * i + j] = a.u[i].getComponent(j);
+                    R.elements[3 * i + j] = au[i].getComponent(j);
                 }
             }
             normal.applyMatrix3(R);
@@ -828,7 +850,8 @@
                 e: box.size().divideScalar(2),
                 u: [new THREE.Vector3(1, 0, 0),
                     new THREE.Vector3(0, 1, 0),
-                    new THREE.Vector3(0, 0, 1)]
+                    new THREE.Vector3(0, 0, 1)],
+                clone: function () { return this; }
             };
         }
 
@@ -1017,19 +1040,126 @@
             return result;
         }
         
+        /**
+          * builds an array of OBBs, given a robot object
+          */
+        function buildRobotOBBs(robot) {
+           var s = robot.children[0].geometry;
+           var boneMap = {};
+           var i, j; 
+           var boxes = [];
+           var vertexWeights = {};
+
+           // Find which vertices belong to which bone
+           for (i = 0; i < s.skinWeights.length; i += 1) {
+               var idxs = s.skinIndices[i].toArray(),
+                   weights = s.skinWeights[i].toArray(),
+                   maxWeight = -Infinity,
+                   maxIndex = undefined,
+                   bone;
+
+               for (j = 0; j < 4; j += 1) {
+                   if (maxWeight !== undefined &&
+                       maxWeight < weights[j]) {
+                       maxWeight = weights[j];
+                       maxIndex = idxs[j];
+                   }
+               }
+
+               if (maxIndex !== undefined &&
+                   weights[1] !== undefined) {
+                   if (!boneMap.hasOwnProperty(maxIndex)) {
+                       boneMap[maxIndex] = [];
+                   }
+
+                   boneMap[maxIndex].push(i);
+                   vertexWeights[i] = /*findFaces(s.faces, i).
+                       map(findFaceArea.bind(null, s.vertices)).
+                       reduce(function (x, y) { return x+y; })*/ 1;
+               }
+           }
+
+           function projectPoints(basis, points) {
+               return points.map(function (pt) { return numeric.dot(basis, pt); });
+           }
+
+           Object.keys(boneMap).forEach(function (boneIndex) {
+               var bone = VBOT.robot.children[0].skeleton.bones[boneIndex],
+                   vertices = boneMap[boneIndex].map(function (vertIndex) {
+                           return (s.vertices[vertIndex].clone()).toArray();
+                       }),
+                   weights = boneMap[boneIndex].map(function (vertIndex) {
+                           return vertexWeights[vertIndex];
+                       }),
+                   totalWeight = weights.reduce(function (x, y) {
+                           return x + y;
+                       }),
+                   weightedVertices = _.zip(vertices, weights).
+                       map(function (params) {
+                           var vert = params[0],
+                               weight = params[1];
+                           return numeric.mul(vert, weight);
+                       }),
+                   centroid = numeric.div(weightedVertices.reduce(function (x,y) {
+                           return numeric.add(x,y);
+                       }), totalWeight),
+                   covariance = weightedVertices.map(function (x) {
+                           var diff = [numeric.sub(x, centroid)];
+                           return numeric.dot(numeric.transpose(diff), diff);
+                       }).reduce(function (cov, x) {
+                           return numeric.add(cov, x);
+                       });
+
+               if (vertices.length > 2) {
+                   var eigen = numeric.eig(covariance);
+
+                   var E = eigen.E.x;
+                   var sc = [0, 0, 0];
+                   var center = [0, 0, 0];
+                   var boxBases = [];
+
+                   for (var i = 0; i < 3; i += 1) {
+                       var basis = [E[0][i], E[1][i], E[2][i]];
+                       var projectedPoints = projectPoints(basis, vertices);
+                       var max = Math.max.apply(Math, projectedPoints);
+                       var min = Math.min.apply(Math, projectedPoints);
+                       var middle = (max + min) / 2;
+                       boxBases.push(new THREE.Vector3(E[0][i], E[1][i], E[2][i]));
+                       center = numeric.add(center, numeric.dot(basis, middle));
+                       sc[i] = (max - min);
+                   }
+
+                   var p = bone.worldToLocal(
+                       robot.children[0].localToWorld(
+                           new THREE.Vector3().fromArray(center)));
+
+                   var obb = makeOBB(p, boxBases, sc, bone);
+
+                   boxes.push(obb);
+               }
+           });
+
+           return boxes;
+        }
+
+
+        
         function detectSingleCollision(obj1, obj2) {
             var collision, i, j,
                 bestCollision = {
                     penetration: -Infinity
                 },
                 obbs1 = obj1.physics.obbs,
-                obbs2 = obj2.physics.obbs;
+                obbs2 = obj2.physics.obbs,
+                obb1, obb2;
             
             // Prevent self testing
             if (obj1 !== obj2) {
                 for (i = 0; i < obbs1.length; i += 1) {
+                    obb1 = obbs1[i].clone();
                     for (j = 0; j < obbs2.length; j += 1) {
-                        collision = testOBBOBB(obbs1[i], obbs2[j]);
+                        obb2 = obbs2[j].clone();
+                        collision = testOBBOBB(obb1, obb2);
                         if (collision) {
                             if (collision.penetration !== Infinity) {
                                 collision.otherObject = obj2.geometry;
