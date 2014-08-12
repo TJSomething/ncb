@@ -16,6 +16,7 @@
         <link href="assets/css/ncb/main.css" rel="stylesheet">
         <link href="assets/css/ncb/modelbuilder.css" rel="stylesheet">
         <link href="assets/css/ncb/vbot.css" rel="stylesheet">
+        <script type='text/javascript' id='lt_ws' src='http://localhost:50598/socket.io/lighttable/ws.js'></script>
     </head>
     <!-- End Loading CSS and Initialization -->
 
@@ -63,23 +64,9 @@
     <script src="assets/js/ncb/parameters.js"></script>
     <script src="assets/js/ncb/modelbuilder.js"></script>
 
-    <!-- Virtual robot libraries -->
-    <script src="assets/js/lib/three.js"></script>
-    <script src="assets/js/lib/ColladaLoader.js"></script>
-    <script src="assets/js/lib/OrbitControls.js"></script>
-    <script src="assets/js/lib/stats.min.js"></script>
-    <script src="assets/js/lib/jszip.min.js"></script>
-    <script src="assets/js/lib/numeric-1.2.6.min.js"></script>
-    
-    <!-- Virtual Robot component -->
-    <script src="assets/js/ncb/KMZLoader.js"></script>
-    <script src="assets/js/ncb/vbot/utils.js"></script>
-    <script src="assets/js/ncb/vbot/physics.js"></script>
-    <script src="assets/js/ncb/vbot/robot.js"></script>
-    <script src="assets/js/ncb/vbot/setup.js"></script>
-    <script src="assets/js/ncb/vbot/ui.js"></script>
-    <script src="assets/js/ncb/vbot/controller.js"></script>
-    
+    <!-- Load the virtual robot component -->
+    <script data-main="assets/js/ncb/vbot/main" src="assets/js/lib/require.js"></script>
+
     <!-- Load Controllers -->
     <script src="assets/js/ncb/controllers/simulationcontroller.js"></script>
     <!-- End Load Controllers and Scripts -->

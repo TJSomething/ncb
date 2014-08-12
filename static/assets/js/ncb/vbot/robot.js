@@ -1,83 +1,87 @@
 /* jslint browser: true */
-/* global THREE, _:false, console, VBOT: true */
+/* global THREE, _:false, console */
 
-(function (global) {
+define(['three', 'vbot/physics'],
+function (THREE, physics) {
     'use strict';
 
-    global.VBOT = global.VBOT || {};
-    var VBOT = global.VBOT;
-    
-    // So, we need to make some function generators so that we can have more
-    // code reuse between robots
-    function animateWalking(lleg, rleg, maxLegAngle) {
-        return (function() {
-            var walkState = 0,
-                lrleg = rleg.children[0],
-                llleg = lleg.children[0];
+    /** @exports vbot/Robot */
 
-            return function (ds, dtheta) {
-                // Don't let undefined through
-                ds = ds || 0;
-                dtheta = dtheta || 0;
+    /**
+     * The methods needed for using arms. Requires several properties:
+     *
+     * @property {THREE.Bone} larm the left humerus
+     * @property {THREE.Bone} rarm the right humerus
+     * @property {Object} heldObject the two held objects
+     * @property {?THREE.Object3D} heldObject.left
+     * @property {?THREE.Object3D} heldObject.right
+     * @property {Object} defaultArmUpVectors the up vectors used for rotating
+     *                                        arms
+     * @property {THREE.Vector3} defaultArmUpVectors.left
+     * @property {THREE.Vector3} defaultArmUpVectors.right
+     * @property {Array.<Number>} armMatrixOrder the order of the columns in the
+     *   arm rotation matrix; 0 is the target vector, 1 is the up vector, and 2
+     *   is perpendicular to both of those
+     * @property {function} calculateHandLocation a function that, given a hand
+     * as a string, left or right, will give the global coordinates of that hand
+     *
+     * @mixin
+     * @memberof Robot~
+     */
+    var hasArms = {
+        /**
+         * Attaches an object to the given arm.
+         *
+         * @instance
+         * @param  {THREE.Object3D} target the object to attach to the arm
+         * @param  {string=} arm           the arm to attach to; defaults to the
+         *                                 nearest arm to the given object
+         */
+        grab: function (target, arm) {
+            var worldPosition = target.positionWorld(),
+                llarm = this.larm.children[0], // lower left arm
+                lrarm = this.rarm.children[0], // lower right arm
+                leftElbow = llarm.positionWorld(),
+                rightElbow = lrarm.positionWorld(),
+                distToLeftElbow = worldPosition.distanceTo(leftElbow),
+                distToRightElbow = worldPosition.distanceTo(rightElbow),
+                oldParentMatrix = target.parent.matrixWorld,
+                reverseParentTransform = new THREE.Matrix4(),
+                isArmSet = arm !== undefined,
+                isLeft = isArmSet && (arm[0] === 'l' || arm[0] === 'L'),
+                isLeftCloser = distToLeftElbow < distToRightElbow;
 
-                // Change our walk state
-                walkState += ds;
+            // Attach the target to the nearest arm
+            if ((isArmSet && isLeft) ||
+                (!isArmSet && isLeftCloser)) {
+                llarm.add(target);
+            } else {
+                lrarm.add(target);
+            }
 
-                rleg.rotation.x =
-                    maxLegAngle * Math.sin(walkState / maxLegAngle);
-                lleg.rotation.x =
-                    -maxLegAngle * Math.sin(walkState / maxLegAngle);
-                lrleg.rotation.x = maxLegAngle -
-                    maxLegAngle * Math.cos(walkState / maxLegAngle);
-                llleg.rotation.x = maxLegAngle +
-                    maxLegAngle * Math.cos(walkState / maxLegAngle);
-            };
-        }());
-    }
-    
-    function grab(larm, rarm) {
-        return function (target, arm) {
-                var worldPosition = target.positionWorld(),
-                    llarm = larm.children[0], // lower left arm
-                    lrarm = rarm.children[0], // lower right arm
-                    leftElbow = llarm.positionWorld(),
-                    rightElbow = lrarm.positionWorld(),
-                    distToLeftElbow = worldPosition.distanceTo(leftElbow),
-                    distToRightElbow = worldPosition.distanceTo(rightElbow),
-                    oldParentMatrix = target.parent.matrixWorld,
-                    reverseParentTransform = new THREE.Matrix4(),
-                    isArmSet = arm !== undefined,
-                    isLeft = isArmSet && (arm[0] === 'l' || arm[0] === 'L'),
-                    isLeftCloser = distToLeftElbow < distToRightElbow;
+            // Position the target properly
+            reverseParentTransform.getInverse(
+                target.parent.matrixWorld);
+            reverseParentTransform. // Remove the new parent's transform
+                multiply(oldParentMatrix). // Add the old parent's
+                multiply(target.matrix). // Add the original transform
+                decompose(target.position, // And set
+                    target.rotation,
+                    target.scale);
 
-                // Attach the target to the nearest arm
-                if ((isArmSet && isLeft) ||
-                    (!isArmSet && isLeftCloser)) {
-                    llarm.add(target);
-                } else {
-                    lrarm.add(target);
-                }
-
-                // Position the target properly
-                reverseParentTransform.getInverse(
-                    target.parent.matrixWorld);
-                reverseParentTransform. // Remove the new parent's transform
-                    multiply(oldParentMatrix). // Add the old parent's
-                    multiply(target.matrix). // Add the original transform
-                    decompose(target.position, // And set
-                        target.rotation,
-                        target.scale);
-
-                // Note that we should do collision detection for this
-                VBOT.physics.changeObjectState(target, 'held');
-            };
-    }
-    
-    function release(heldObjects) {
-        return function (arm) {
+            // Note that we should do collision detection for this
+            physics.changeObjectState(target, 'held');
+        },
+        /**
+         * Detaches the held object from the given arm.
+         *
+         * @instance
+         * @param  {string} arm the arm, either "left" or "right"
+         */
+        release: function (arm) {
             var isLeft = (arm[0] === 'l' || arm[0] === 'L'),
                 target = isLeft ?
-                    heldObjects.left : heldObjects.right,
+                    this.heldObjects.left : this.heldObjects.right,
                 oldParentMatrix,
                 reverseParentTransform = new THREE.Matrix4();
 
@@ -97,47 +101,52 @@
 
                 // We need to note that we're holding nothing
                 if (isLeft) {
-                    heldObjects.left = null;
+                    this.heldObjects.left = null;
                 } else {
-                    heldObjects.right = null;
+                    this.heldObjects.right = null;
                 }
             }
 
             // Switch to a falling state
-            VBOT.physics.changeObjectState(target, 'falling');
-        };
-    }
-    
-    function instantPointArm(obj) {
+            physics.changeObjectState(target, 'falling');
+        },
         /**
          * Points an arm at a target vector, oriented with an up vector
          *
-         * @param arm string which arm to move
-         * @param targetVector THREE.Vector3 where the arm should point
-         * @param upVector THREE.Vector3 the direction the top of the arm
-         * @param isGlobal boolean whether targetVector is local or global
+         * @instance
+         * @param {string} arm which arm to move
+         * @param {THREE.Vector3} targetVector where the arm should point
+         * @param {THREE.Vector3=} upVector the direction the top of the arm
+         * @param {boolean=} isGlobal whether targetVector is local (default) or
+         *                            global
          */
-        return function (arm, targetVector, isGlobal, upVector) {
-            obj.rotateArmTowards(arm, targetVector, 1, false, isGlobal, upVector);
-        };
-    }
-    
-    function rotateArmTowards(larm, rarm, leftDefaultUpVector, rightDefaultUpVector) {
+        instantPointArm: function (arm, targetVector, isGlobal, upVector) {
+            obj.rotateArmTowards(arm, targetVector, 1, false, isGlobal,
+                                 upVector);
+        },
         /**
          * Rotates an arm toward pointing at a location
          *
-         * @param arm string which arm to move
-         * @param targetVector THREE.Vector3 where the arm should point
-         * @param amount float the amount to move the arm, in either radians or 
-         *                     percent of motion remaining
-         * @param inRadians boolean whether the amount is in radians
-         * @param isGlobal boolean whether targetVector is local or global
-         * @param upVector THREE.Vector3 the direction the top of the arm, optional
-         * @return boolean if we're done rotating the arm toward the given vector
+         * @instance
+         * @param {arm} string                 which arm to move
+         * @param {THREE.Vector3} targetVector where the arm should point
+         * @param {Number} amount              the amount to move the arm, in
+         *                                     either radians or percent of
+         *                                     motion remaining
+         * @param {boolean} inRadians          whether the amount is in radians;
+         *                                     if not then it's assumed that
+         *                                     it's a fraction of the arc
+         * @param {boolean=} isGlobal          whether targetVector is local
+         *                                     (default) or global
+         * @param {THREE.Vector3=} upVector    the direction the top of the arm,
+         *                                     optional
+         * @return {boolean}                   if we're done rotating the arm
+         *                                     toward the given vector
          */
-        return function (arm, targetVector, amount, inRadians, isGlobal, upVector) {
+        rotateArmTowards: function (arm, targetVector, amount, inRadians,
+                                    isGlobal, upVector) {
             var isLeft = arm[0] === 'l' || arm[0] === 'L',
-                armObj = isLeft ? larm : rarm,
+                armObj = isLeft ? this.larm : this.rarm,
                 localMatrix = new THREE.Matrix4(),
                 shoulderLoc = armObj.positionWorld(),
                 shoulderDisplacement = shoulderLoc.clone().sub(this.positionWorld()),
@@ -159,8 +168,8 @@
             // I've found that you get the most intuitive motion if you
             // have up be up and out for the arm
             if (upVector === undefined) {
-                upVector = isLeft ? leftDefaultUpVector.clone() :
-                                    rightDefaultUpVector.clone();
+                upVector = isLeft ? this.defaultArmUpVectors.left.clone() :
+                                    this.defaultArmUpVectors.right.clone();
             } else {
                 upVector = upVector.clone();
             }
@@ -187,13 +196,17 @@
                 normalize();
 
             // Make a rotation matrix
-            var t = targetVector,
-                u = upVector,
-                v = thirdBasis;
+            var b = [targetVector,
+                     upVector,
+                     thirdBasis];
+            // Reorder depending on model
+            b = [b[this.matrixOrder[0]],
+                 b[this.matrixOrder[1]],
+                 b[this.matrixOrder[2]]];
             rotMatrix = new THREE.Matrix4(
-                u.x, t.x, v.x, 0,
-                u.y, t.y, v.y, 0,
-                u.z, t.z, v.z, 0,
+                b[0].x, b[1].x, b[2].x, 0,
+                b[0].y, b[1].y, b[2].y, 0,
+                b[0].z, b[1].z, b[2].z, 0,
                 0,   0,    0,   1
             );
 
@@ -227,27 +240,42 @@
             } else {
                 return false;
             }
-        };
-    }
-    
-    function pickUpAtHand(larm, rarm, heldObjects, calculateHandLocation) {
-        return function (arm) {
+        },
+        /**
+         * A function that picks up the object that's intersecting with the
+         * given hand
+         *
+         * @instance
+         * @param  {string} arm the side that the hand is on ('left' or 'right')
+         * @return {boolean}    whether an object was picked up
+         */
+       pickUpAtHand: function (arm) {
             var intersectingObj,
                 i;
 
+            /**
+             * Checks if an object is intersecting with the given hand
+             *
+             * @param  {string} arm            the side that the hand is on
+             *                                 ('left' or 'right')
+             * @param  {THREE.Object3D} target the object we're checking for
+             *                                 intersection
+             * @return {boolean}               whether the target is
+             *                                 intersecting with the given hand
+             */
             function checkHandCollision(arm, target) {
                 var isRight = arm[0] === 'r' || arm[0] === 'R',
-                    armObj = isRight ? rarm : larm,
-                    handLocation = calculateHandLocation(armObj),
+                    armObj = isRight ? this.rarm : this.larm,
+                    handLocation = this.calculateHandLocation(armObj),
                     targetBox = new THREE.Box3().setFromObject(target);
 
                     return targetBox.containsPoint(handLocation);
             }
 
             // Find an object that's intesecting with the hand
-            for (i = 0; i < VBOT.portables.length; i += 1) {
-                if (checkHandCollision(arm, VBOT.portables[i])) {
-                    intersectingObj = VBOT.portables[i];
+            for (i = 0; i < this.app.portables.length; i += 1) {
+                if (checkHandCollision(arm, this.app.portables[i])) {
+                    intersectingObj = this.app.portables[i];
                     break;
                 }
             }
@@ -256,21 +284,45 @@
                 this.grab(intersectingObj, arm);
 
                 if (arm[0] === 'l' || arm[0] === 'L') {
-                    heldObjects.left = intersectingObj;
+                    this.heldObjects.left = intersectingObj;
                 } else {
-                    heldObjects.right = intersectingObj;
+                    this.heldObjects.right = intersectingObj;
                 }
 
                 return true;
             } else {
                 return false;
             }
-        };
+        }
+    }
+
+    /**
+     * Adds the hasArms mixin to the given robot.
+     *
+     * @memberof Robot~
+     * @param  {Robot} obj
+     */
+    function addArms(obj) {
+        Object.keys(hasArms).forEach(function (methodName) {
+            obj[methodName] = hasArms[methodName];
+        });
     }
 
 
-    VBOT.Robot = (function () {
-        function loadSteve(obj) {
+    var Robot = (function () {
+        /**
+         * Loads the Steve model, puts it as a child under the given object,
+         * and loads the appropriate methods.
+         *
+         * @class
+         * @memberof Robot~
+         * @augments {Robot}
+         * @augments {Robot~hasArms}
+         * @param  {THREE.Object3D} obj the object in the scene that represents
+         *                              where the robot should be placed
+
+         */
+        function Steve(obj) {
             var loader = new THREE.JSONLoader(true);
             loader.load('assets/json/steve.js', function (geometry, materials) {
                 var i, camHeight, near,
@@ -288,7 +340,7 @@
                 steve.scale.set(scale, scale, scale);
 
                 obj.add(steve);
-                obj.app.physics.addObject(obj,
+                physics.addObject(obj,
                     {
                         type: 'dynamic',
                         state: 'controlled'
@@ -307,38 +359,85 @@
 
                 // Place a camera in the robot
                 // Find the bounding box
-                obj.bounds = (new THREE.Box3()).setFromObject(steve);
+                bounds = (new THREE.Box3()).setFromObject(steve);
                 // The camera should be at eye level
-                camHeight = 0.75 * obj.bounds.max.y;
+                camHeight = 0.75 * bounds.max.y;
                 // The near clipping plane should be a little further out
                 //  than the front
-                near = 1.01 * obj.bounds.max.z;
+                near = 1.01 * bounds.max.z;
                 // Make our camera
                 obj.camera = new THREE.PerspectiveCamera(45, 4 / 3, near, 1000);
                 obj.camera.position.set(0, camHeight, 0);
                 obj.camera.rotateY(Math.PI); // Otherwise, it'll point backward
                 obj.add(obj.camera);
 
-                // Add walking
-                obj.animateWalking = animateWalking(lleg, rleg, Math.PI/9);
+                /**
+                 * Makes a function to animate Steve walking.
+                 *
+                 * @param  {THREE.Bone} lleg    Left femur
+                 * @param  {THREE.Bone} rleg    Right femur
+                 * @param  {Number} maxLegAngle the maximum angle of a leg
+                 * @return {Function}           a function that actually
+                 *                              animates
+                 */
+                obj.animateWalking = function(lleg, rleg, maxLegAngle) {
+                    var walkState = 0,
+                        lrleg = rleg.children[0],
+                        llleg = lleg.children[0];
 
-                // This anchors an object to the nearest arm
-                obj.grab = grab(larm, rarm);
+                    /**
+                     * Animate Steve's walking.
+                     *
+                     * @memberof Robot~Steve#
+                     * @param  {Number} ds     the distance moved
+                     * @param  {Number} dtheta the amount rotated
+                     */
+                    function animateWalking(ds, dtheta) {
+                        // Don't let undefined through
+                        ds = ds || 0;
+                        dtheta = dtheta || 0;
 
-                // This removes the target from the arm
-                obj.release = release(heldObjects);
+                        // Change our walk state
+                        walkState += ds;
 
-                obj.instantPointArm = instantPointArm(obj);
+                        rleg.rotation.x =
+                            maxLegAngle * Math.sin(walkState / maxLegAngle);
+                        lleg.rotation.x =
+                            -maxLegAngle * Math.sin(walkState / maxLegAngle);
+                        lrleg.rotation.x = maxLegAngle -
+                            maxLegAngle * Math.cos(walkState / maxLegAngle);
+                        llleg.rotation.x = maxLegAngle +
+                            maxLegAngle * Math.cos(walkState / maxLegAngle);
+                    };
+                    return animateWalking;
+                }(lleg, rleg, Math.PI/9);
 
-                obj.rotateArmTowards = rotateArmTowards(larm, rarm, new THREE.Vector3(1, -1, 0), new THREE.Vector3(1, -1, 0));
-                
-                // Picks up the object that's in the hand, if there is one
+                /**
+                 * Calculates the hand location of Steve as one forearm length
+                 * below the given humerus' child
+                 *
+                 * @memberof Robot~Steve#
+                 * @param  {THREE.Bone} armObj a humerus
+                 * @return {THREE.Vector3}     the hand location
+                 */
                 function calculateHandLocation(armObj) {
                     return new THREE.Vector3(0, -forearmLength, 0).
                         applyMatrix4(armObj.children[0].matrixWorld)
                 }
-                obj.pickUpAtHand = pickUpAtHand(larm, rarm, heldObjects, calculateHandLocation);
-                
+
+                // Set up the properties needed to have arms
+                obj.larm = larm;
+                obj.rarm = rarm;
+                obj.heldObjects = heldObjects;
+                obj.defaultArmUpVectors = {
+                    left: new THREE.Vector3(1, -1, 0),
+                    right: new THREE.Vector3(1, -1, 0)
+                }
+                obj.armMatrixOrder = [0, 1, 2];
+                obj.calculateHandLocation = calculateHandLocation;
+                // Add all the arm movement methods
+                addArms(obj);
+
                 Object.defineProperties(obj, {
                        leftHandObject: {
                                get: function () {
@@ -355,8 +454,18 @@
                 obj.app.fire('robot-ready');
             });
         }
-        
-        function loadCarl(obj) {
+
+        /**
+         * Loads the Carl model as the robot
+         *
+         * @class
+         * @memberof Robot~
+         * @augments {Robot}
+         * @augments {Robot~hasArms}
+         * @param  {THREE.Object3D} obj the object in the scene that represents
+         *                              where the robot should be placed
+         */
+        function Carl(obj) {
             var loader = new THREE.JSONLoader(true);
             loader.load('assets/json/carl.js', function (geometry, materials) {
                 var i, camHeight, near,
@@ -375,7 +484,7 @@
                 carl.scale.set(scale, scale, scale);
 
                 obj.add(carl);
-                obj.app.physics.addObject(obj,
+                physics.addObject(obj,
                     {
                         type: 'dynamic',
                         state: 'controlled'
@@ -385,26 +494,34 @@
                     // For bones
                     materials[i].skinning = true;
                 }
-                
+
                 // Move the arms down
-                larm.rotateZ(-Math.PI/2);
-                rarm.rotateZ(Math.PI/2);
+                //larm.rotateZ(-Math.PI/2);
+                //rarm.rotateZ(Math.PI/2);
 
                 // Place a camera in the robot
                 // Find the bounding box
-                obj.bounds = (new THREE.Box3()).setFromObject(carl);
+                var bounds = (new THREE.Box3()).setFromObject(carl);
                 // The camera should be at eye level
-                camHeight = 0.95 * obj.bounds.max.y;
+                camHeight = 0.95 * bounds.max.y;
                 // The near clipping plane should be a little further out
                 //  than the front
-                near = 1.01 * obj.bounds.max.z;
+                near = 1.01 * bounds.max.z;
                 // Make our camera
                 obj.camera = new THREE.PerspectiveCamera(45, 4 / 3, near, 1000);
                 obj.camera.position.set(0, camHeight, 0);
                 obj.camera.rotateY(Math.PI); // Otherwise, it'll point backward
                 obj.add(obj.camera);
 
-                // Add walking
+                /**
+                 * Generate a function for Carl walking.
+                 *
+                 * @param  {THREE.Bone} rleg    right femur
+                 * @param  {THREE.Bone} lleg    left femur
+                 * @param  {Number} maxLegAngle how much to swing the femurs
+                 *                              away from vertical, in radians
+                 * @return {Function}           the actual animation function
+                 */
                 obj.animateWalking = (function (rleg, lleg, maxLegAngle) {
                     var walkState = 0,
                         lrleg = rleg.children[0],
@@ -414,18 +531,25 @@
                         legAngle = 0,
                         lastDs = 0;
 
-                    return function (ds, dtheta) {                        
+                    /**
+                     * Animate Carl walking.
+                     *
+                     * @param  {Number} ds     the distance moved
+                     * @param  {Number} dtheta the angle rotated
+
+                     */
+                    return function (ds, dtheta) {
                         // Don't let undefined through
                         ds = ds || 0;
                         dtheta = dtheta || 0;
-                       
+
                         // If we just started walking, slowly increase our stride
                         if (Math.abs(ds) > 0) {
                             // Remember the current walking rate as a approximation
                             // of speed, which we use to figure out deceleration
                             // speed
                             lastDs = Math.abs(ds);
-                            
+
                             if (legAngle + lastDs < maxLegAngle) {
                                 legAngle += lastDs;
                             } else {
@@ -459,115 +583,32 @@
                     };
                 }(rleg, lleg, Math.PI/9));
 
-                // This anchors an object to the nearest arm
-                obj.grab = grab(larm, rarm);
-
-                // This removes the target from the arm
-                obj.release = release(heldObjects);
-
-                obj.instantPointArm = instantPointArm(obj);
-
-                obj.rotateArmTowards = function (arm, targetVector, amount, inRadians, isGlobal, upVector) {
-            var isLeft = arm[0] === 'l' || arm[0] === 'L',
-                armObj = isLeft ? larm : rarm,
-                localMatrix = new THREE.Matrix4(),
-                shoulderLoc = armObj.positionWorld(),
-                shoulderDisplacement = shoulderLoc.clone().sub(this.positionWorld()),
-                thirdBasis = new THREE.Vector3(),
-                rotMatrix,
-                angleDiff,
-                s;
-
-            // Don't want to mangle the formal parameters
-            targetVector = targetVector.clone();
-
-            localMatrix.getInverse(this.matrixWorld);
-
-            // isGlobal defaults to false
-            if (isGlobal === undefined) {
-                isGlobal = false;
-            }
-
-            // I've found that you get the most intuitive motion if you
-            // have up be up and out for the arm
-            if (upVector === undefined) {
-                upVector = new THREE.Vector3(isLeft? 1 : -1,
-                    0, 0);
-            } else {
-                upVector = upVector.clone();
-            }
-
-            // Convert the targetVector into local space, if needed
-            if (isGlobal) {
-                targetVector.
-                    sub(shoulderDisplacement).
-                    applyMatrix4(localMatrix);
-            }
-            targetVector.
-                multiplyScalar(-1);
-
-            targetVector.normalize();
-            upVector.normalize();
-
-            // For a rotation we need three bases
-            thirdBasis.crossVectors(targetVector, upVector).
-                normalize();
-
-            // Also, force the up vector to be perpendicular to the target
-            // vector
-            upVector.crossVectors(targetVector, thirdBasis).
-                normalize();
-
-            // Make a rotation matrix
-            var t = targetVector,
-                u = upVector,
-                v = thirdBasis;
-            rotMatrix = new THREE.Matrix4(
-                t.x, v.x, u.x, 0,
-                t.y, v.y, u.y, 0,
-                t.z, v.z, u.z, 0,
-                0,   0,    0,   1
-            );
-
-            // Make a quaternion to rotate to
-            var q1 = armObj.quaternion,
-                q2 = new THREE.Quaternion();
-            q2.setFromRotationMatrix(rotMatrix);
-
-            // If the amount to rotate is in radians, we need to convert to
-            // amount of arc to rotate by in order use SLERP
-            if (inRadians) {
-                s = q1.w * q2.w +
-                    q1.x * q2.x +
-                    q1.y * q2.y +
-                    q1.z * q2.z;
-                angleDiff = 2 * Math.acos(Math.abs(s));
-                amount = amount/angleDiff;
-            }
-
-            // Prevent overshoot
-            if (amount > 1) {
-                amount = 1;
-            }
-
-            // Rotate the stuff
-            armObj.quaternion.slerp(q2, amount);
-
-            // If it's done moving, then let's say that
-            if (amount === 1) {
-                return true;
-            } else {
-                return false;
-            }
-        };
-                
-                // Picks up the object that's in the hand, if there is one
+                /**
+                 * Calculates the location of the hand to see if it's picking
+                 * something up.
+                 *
+                 * @memberof Robot~Carl#
+                 * @param  {THREE.Bone} armObj the humerus above the wanted hand
+                 * @return {THREE.Vector3} the location of the hand
+                 */
                 function calculateHandLocation(armObj) {
                     return armObj.children[0].children[0].children[0].positionWorld();
                 }
-                
-                obj.pickUpAtHand = pickUpAtHand(larm, rarm, heldObjects, calculateHandLocation);
-                
+                obj.calculateHandLocation = calculateHandLocation;
+
+                // Set up the properties needed to have arms
+                obj.larm = larm;
+                obj.rarm = rarm;
+                obj.heldObjects = heldObjects;
+                obj.defaultArmUpVectors = {
+                    left: new THREE.Vector3(1, 0, 0),
+                    right: new THREE.Vector3(-1, 0, 0)
+                }
+                obj.armMatrixOrder = [0, 2, 1];
+                obj.calculateHandLocation = calculateHandLocation;
+                // Add all the arm movement methods
+                addArms(obj);
+
                 Object.defineProperties(obj, {
                        leftHandObject: {
                                get: function () {
@@ -585,7 +626,16 @@
             });
         }
 
-        function loadMouse(obj) {
+        /**
+         * Loads the computer mouse model as the robot.
+         *
+         * @class
+         * @memberof Robot~
+         * @augments {Robot}
+         * @param  {THREE.Object3D} obj the object in the scene that represents
+         *                              where the robot should be placed
+         */
+        function Mouse(obj) {
             var loader = new THREE.ObjectLoader();
 
             loader.load('assets/json/mouse.js', function (robotObj) {
@@ -593,7 +643,7 @@
 
                 robotObj.scale.set(0.2, 0.2, 0.2);
                 obj.add(robotObj);
-                obj.app.physics.addObject(obj,
+                physics.addObject(obj,
                     {
                         isStatic: false,
                         state: 'controlled'
@@ -601,19 +651,24 @@
 
                 // Place a camera in the robot
                 // Find the bounding box
-                obj.bounds = (new THREE.Box3()).setFromObject(robotObj);
+                var bounds = (new THREE.Box3()).setFromObject(robotObj);
                 // The camera should be 3/4 up the robot
-                camHeight = 0.75 * obj.bounds.max.y;
+                camHeight = 0.75 * bounds.max.y;
                 // The near clipping plane should be a little further out
                 //  than the front
-                near = 1.05 * obj.bounds.max.z;
+                near = 1.05 * bounds.max.z;
                 // Make our camera
                 obj.camera = new THREE.PerspectiveCamera(45, 4 / 3, near, 1000);
                 obj.camera.position.set(0, camHeight, 0);
                 obj.camera.rotateY(Math.PI); // Otherwise, it'll point backward
                 obj.add(obj.camera);
 
-                // Animated walking is a no-op
+                /**
+                 * A stand-in for animating the mouse, as the mouse is not
+                 * animated.
+                 *
+
+                 */
                 obj.animateWalking = function () {};
 
                 obj.app.fire('robot-ready');
@@ -621,62 +676,109 @@
         }
 
         var modelLoaders = {
-            mouse: loadMouse,
-            steve: loadSteve,
-            carl: loadCarl
+            mouse: Mouse,
+            steve: Steve,
+            carl: Carl
         };
 
-
-        return function (obj, robotType, app) {
-            var that = this;
-
-            // Allow usage of new
-            if (!(this instanceof VBOT.Robot)) {
-                return new VBOT.Robot(obj, robotType);
-            }
-
+        /**
+         * Loads the given robot underneath the given model.
+         *
+         * @class Robot
+         * @augments {THREE.Object3D}
+         * @property {Object} app the application
+         * @property {Number} speed the current walking speed in m/s
+         * @property {Number} angularVelocity the current rotation speed in rad/s
+         * @property {THREE.PerspectiveCamera} camera the robot's "eyes"
+         *
+         * @param  {THREE.Object3D} obj An object used to set the initial
+         *                              position of the robot
+         * @param  {string} robotType   Which robot to load (mouse, steve, or
+         *                              carl)
+         * @param {Object} app          the virtual robot application state
+         *                              object
+         */
+        function Robot(obj, robotType, app) {
             // Clear the dummy geometry used to stand in for
             //  the robot
             obj.geometry = new THREE.Geometry();
 
             // We're going to make a new object that isn't subject to the scaling
             //  in the scene and won't kill accidental children
-            that = new THREE.Object3D();
-            that.position.copy(obj.position);
-            that.quaternion.copy(obj.quaternion);
-            that.name = 'Robot Parent';
-            that.app = app;
-            that.app.scene.add(that);
+            var robot = new THREE.Object3D();
+            robot.position.copy(obj.position);
+            robot.quaternion.copy(obj.quaternion);
+            robot.name = 'Robot Parent';
+            // We need a reference to the VBOT module to avoid a circular
+            // dependency
+            robot.app = app;
+            // Put the robot into the scene
+            app.scene.add(robot);
 
             // Load the robot model asynchronously
-            modelLoaders[robotType](that);
+            modelLoaders[robotType](robot);
 
-            // Methods for robots
-            that.instantForward = function (displacement) {
+            /**
+             * Move forward instantly
+             *
+             * @memberof Robot#
+             * @param  {Number} displacement the displacement forward in
+             *                               meters
+             */
+            function instantForward(displacement) {
                 var model = new THREE.Vector3(0, 0, displacement),
                     world = model.applyQuaternion(this.quaternion);
 
                 this.animateWalking(displacement);
                 this.position.add(world);
             };
+            robot.instantForward = instantForward;
 
-            that.instantBackward = function(displacement) {
+            /**
+             * Move backwards instantly
+             *
+             * @memberof Robot#
+             * @param  {Number} displacement the displacement backwards in
+             *                               meters
+             */
+             function instantBackward(displacement) {
                 this.instantForward(-displacement);
             };
+            robot.instantBackward = instantBackward;
 
-            that.instantRight = function (displacement) {
+            /**
+             * Turns the robot right instantly
+             *
+             * @memberof Robot#
+             * @param  {Number} displacement the number of radians to turn right
+             */
+            function instantRight(displacement) {
                 this.animateWalking(0, displacement);
                 this.rotateY(displacement);
             };
+            robot.instantRight = instantRight;
 
-            that.instantLeft = function (displacement) {
-                that.instantRight(-displacement);
+            /**
+             * Turns the robot left instantly.
+             *
+             * @memberof Robot#
+             * @param {Number} displacement the number of radians to turn left
+             */
+            function instantLeft(displacement) {
+                this.instantRight(-displacement);
             };
+            robot.instantLeft = instantLeft;
 
-            // This finds exactly how the robot would move if
-            //  it were going forward and turning at the same
-            //  time.
-            that.simultaneousTurnMove = function (ds, dtheta) {
+            /**
+             * This goes forward and turns simultaneously, teleporting to robot
+             * to the location it would reach if it had been travelling forward
+             * and turning simultaneously.
+             *
+             * @memberof Robot#
+             * @param  {Number} ds     the number of meters to travel forward
+             * @param  {Number} dtheta the number of radians to turn right by
+             */
+            function simultaneousTurnMove(ds, dtheta) {
                 var phi, turningRadius, dist;
 
                 if (Math.abs(dtheta) > 1e-6) {
@@ -694,15 +796,25 @@
                 // Make sure everyone knows that we've moved
                 this.updateMatrix();
             };
+            robot.simultaneousTurnMove = simultaneousTurnMove;
 
-            that.move = function (dt) {
+
+            /**
+             * Moves the robot in accordance with the current walking and
+             * turning speed.
+             *
+             * @param  {Number} dt the time step to advance by
+             */
+            function move(dt) {
                 var ds = this.speed * dt,
                     dtheta = this.angularVelocity * dt;
 
                 // Move
                 this.simultaneousTurnMove(ds, dtheta);
             };
-            that.app.on('logic-tick', that.move, that);
+            robot.move = move;
+
+            robot.app.on('logic-tick', robot.move, robot);
 
             document.addEventListener( 'keydown', function (event) {
                 if (event.altKey) {
@@ -711,41 +823,46 @@
 
                 switch (event.keyCode) {
                     case 83: // S
-                        that.speed = -1.7;
+                        robot.speed = -1.7;
                         break;
                     case 87: // W
-                        that.speed = 1.7;
+                        robot.speed = 1.7;
                         break;
                     case 65: // A
-                        that.angularVelocity = 1;
+                        robot.angularVelocity = 1;
                         break;
                     case 68: // D
-                        that.angularVelocity = -1;
+                        robot.angularVelocity = -1;
                         break;
                 }
             }, false );
             document.addEventListener( 'keyup', function (event) {
                 switch (event.keyCode) {
                     case 83: // S
-                        that.speed = 0;
+                        robot.speed = 0;
                         break;
                     case 87: // W
-                        that.speed = 0;
+                        robot.speed = 0;
                         break;
                     case 65: // A
-                        that.angularVelocity = 0;
+                        robot.angularVelocity = 0;
                         break;
                     case 68: // D
-                        that.angularVelocity = 0;
+                        robot.angularVelocity = 0;
                         break;
                 }
             }, false );
 
             // Properties
-            that.speed = 0;
-            that.angularVelocity = 0;
+            robot.speed = 0;
+            robot.angularVelocity = 0;
 
-            return that;
-        };
+            return robot;
+        }
+        Robot.prototype = THREE.Object3D.prototype;
+
+        return Robot;
     }());
-})(this);
+
+    return Robot;
+});

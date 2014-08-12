@@ -2,31 +2,59 @@
 /* global THREE, $:false, _:false, console, mod */
 
 // Note that this depends on the the robot being loaded
-(function (global) {
+define(['three', 'vbot/utils'],
+function (THREE, utils) {
     'use strict';
-    
-    global.VBOT = global.VBOT || {};
-    var VBOT = global.VBOT;
-    
+
+    /** @exports vbot/controller */
+
     var capabilities,
         robot,
         actionQueue = [],
         worker,
-        actionsCompleted = [];    
+        actionsCompleted = [],
+        app;
 
-    function init() {
-        robot = VBOT.robot;
+    /**
+     * Loads some useful objects into the controller scope.
+     *
+     * @memberof module:vbot/controller
+     * @param {Object} vbotApp the virtual robot application state
+     */
+    function init(vbotApp) {
+        app = vbotApp;
+        robot = app.robot;
         capabilities = getCapabilities();
     }
 
-    // Tests if an object has all of a list of methods
+    /**
+     * Tests if an object has all of an array of methods.
+     *
+     * @memberof module:vbot/controller~
+     * @param  {Object} obj             the object being tested
+     * @param  {Array.<string>} methods the methods to check for
+     * @return {Boolean}                if all of those methods exist
+     */
     function methodTest(obj, methods) {
         return methods.every(function (method) {
             return typeof obj[method] === 'function';
         });
     }
 
-    // We need the robots capabilities
+    /**
+     * Tests if the robot loaded has certain capabilities.
+     *
+     * Tested capabilities are:
+     * - motion
+     * - grab
+     * - arms
+     * - autoPickUp
+     * - expressions
+     *
+     * @memberof module:vbot/controller~
+     * @return {Object.<string,boolean>} an object where the capabilities are
+     *                                   the keys and the values are all true
+     */
     function getCapabilities() {
         var capabilities = {};
 
@@ -70,11 +98,36 @@
             ])) {
             capabilities.expressions = true;
         }
-        
+
         return capabilities;
     }
 
-    // Makes an object containing all "sensor" data
+    /**
+     * Builds an object containing all the sensor data.
+     *
+     * Existing sensors are:
+     * - speed
+     * - angularVelocity
+     * - compass
+     * - arms
+     *   + left and right
+     *     * held: the name of the held object in a given hand
+     * - expression
+     * - camera
+     *   + data: Int32Buffer of camera data
+     *   + height
+     *   + width
+     * - collision
+     *   + top
+     *   + bottom
+     *   + front
+     *   + back
+     *   + left
+     *   + right
+     *
+     * @memberof module:vbot/controller~
+     * @return {object} the sensor data
+     */
     function sense() {
         var sensors = {};
 
@@ -100,7 +153,7 @@
                 right: {
                     held: robot.rightHandObject && robot.rightHandObject.name
                 }
-                
+
             };
 
             // TODO: add arm velocities
@@ -111,9 +164,9 @@
         }
 
         sensors.camera = {
-            data: VBOT.cameraData,
-            width: VBOT.cameraWidth,
-            height: VBOT.cameraHeight
+            data: app.cameraData,
+            width: app.cameraWidth,
+            height: app.cameraHeight
         };
 
         sensors.collision = detectCollisions();
@@ -121,7 +174,8 @@
         return sensors;
     }
 
-    /** A helper method that takes an object of functions that mirrors
+    /**
+     * A helper method that takes an object of functions that mirrors
      * the possible structure of an incoming object, tests for that
      * structure and executes code on the condition that that part
      * of the structure exists, with the found bit as the parameter
@@ -134,8 +188,9 @@
      *   }, { walk: 1.0, jump: true });
      *
      *
-     * @param template the expected structure
-     * @param obj the object being tested
+     * @memberof module:vbot/controller~
+     * @param {object} template the expected structure
+     * @param {object} obj the object being tested
      */
     function executeFromStructure(template, obj) {
         for (var key in template) {
@@ -195,11 +250,19 @@
         }
     }*/
 
-    function test() {
+    /**
+     * Starts up a test of the controller that loads a script from the server
+     * and executes it.
+     *
+     * @memberof module:vbot/controller
+     * @param {Object} vbotApp the virtual robot application state
+     * @return {Worker} The web worker executing the script
+     */
+    function test(vbotApp) {
         var sandbox = new Worker('assets/js/ncb/vbot/worker.js'),
             exampleReq = new XMLHttpRequest();
-        
-        init();
+
+        init(vbotApp);
 
         exampleReq.addEventListener('load', function () {
             console.log('loaded example');
@@ -222,13 +285,29 @@
 
         return sandbox;
     }
-    
+
+    /**
+     * Removes an action from the list of actions in progress. This is used
+     * when an action is completed.
+     *
+     * @memberof module:vbot/controller~
+     * @param  {string} actionId the ID number of the action
+     */
     function removeCompletedAction(actionId) {
         actionQueue = actionQueue.filter(function (action) {
             return action.id !== actionId;
         });
     }
 
+    /**
+     * Steps the worker by:
+     * - Removing completed actions from the list of actions in progress
+     * - sending the completed actions, the sensor data, and the time since the
+     *   last step to the controller
+     *
+     * @memberof module:vbot/controller
+     * @param  {Number} dt the time step length
+     */
     function step(dt) {
         if (worker !== undefined) {
             // Delete all the completed actions from the action queue
@@ -245,6 +324,12 @@
         }
     }
 
+    /**
+     * Actuates the robot based on what the controller says to do.
+     *
+     * @memberof module:vbot/controller~
+     * @param  {Object} e the event from the controller worker
+     */
     function actuate(e) {
         if (e.data.error) {
             console.log(e.data.error);
@@ -266,6 +351,14 @@
         }
     }
 
+    /**
+     * Given an action in progress, actuate the robot over one time step,
+     * executing a portion of that action.
+     *
+     * @memberof module:vbot/controller~
+     * @param  {Action} action the action in progress
+     * @param  {Number} dt     the length of the time step
+     */
     function stepAction(action, dt) {
         var remainingAngle,
             targetLoc,
@@ -284,9 +377,9 @@
         switch (action.action) {
             case 'turnTowards':
                 // Calculate how much to turn
-                target = VBOT.scene.getObjectByName(action.objName, true);
+                target = app.scene.getObjectByName(action.objName, true);
                 // Target location in local space
-                targetLoc = VBOT.robot.worldToLocal(
+                targetLoc = app.robot.worldToLocal(
                     target.centerWorld());
                 remainingAngle = Math.atan2(targetLoc.x, targetLoc.z);
                 // Calculate how much we need to turn
@@ -302,32 +395,32 @@
                     throw "Logic error in turnTowards";
                 }
                 // Make sure that we don't over turn
-                if (Math.sign(remainingAngle - stepAngle) !== 
+                if (Math.sign(remainingAngle - stepAngle) !==
                     Math.sign(remainingAngle)) {
                     stepAngle = remainingAngle;
                 }
                 // Turn it
-                VBOT.robot.rotateY(stepAngle);
+                app.robot.rotateY(stepAngle);
                 // If we're done, note that
                 if (remainingAngle - stepAngle === 0) {
                     actionsCompleted.push(action.id);
                 }
                 break;
             case 'setSpeed':
-                VBOT.robot.speed = action.speed;
+                app.robot.speed = action.speed;
                 actionsCompleted.push(action.id);
                 break;
             case 'turn':
-                VBOT.robot.angularVelocity = action.speed;
+                app.robot.angularVelocity = action.speed;
                 actionsCompleted.push(action.id);
                 break;
             case 'pointArmAt':
-                target = VBOT.scene.getObjectByName(action.objName, true);
+                target = app.scene.getObjectByName(action.objName, true);
                 targetLoc = target.centerWorld();
                 done = false;
                 if (action.hasOwnProperty('speed')) {
                     stepAngle = action.speed * dt;
-                    done = VBOT.robot.rotateArmTowards(action.arm,
+                    done = app.robot.rotateArmTowards(action.arm,
                                                        targetLoc,
                                                        stepAngle,
                                                        true,
@@ -343,7 +436,7 @@
                     } else {
                         throw "Insane logic error in pointArmAt";
                     }
-                    done = VBOT.robot.rotateArmTowards(action.arm,
+                    done = app.robot.rotateArmTowards(action.arm,
                                                        targetLoc,
                                                        stepAmount,
                                                        false,
@@ -365,7 +458,7 @@
                 done = false;
                 if (action.hasOwnProperty('speed')) {
                     stepAngle = action.speed * dt;
-                    done = VBOT.robot.rotateArmTowards(action.arm,
+                    done = app.robot.rotateArmTowards(action.arm,
                                                        targetLoc,
                                                        stepAngle,
                                                        true,
@@ -381,7 +474,7 @@
                     } else {
                         throw "Insane logic error in pointArmAt";
                     }
-                    done = VBOT.robot.rotateArmTowards(action.arm,
+                    done = app.robot.rotateArmTowards(action.arm,
                                                        targetLoc,
                                                        stepAmount,
                                                        false,
@@ -398,6 +491,23 @@
         }
     }
 
+    /**
+     * Makes an object consisting of whether or not there is a collision in
+     * any of the six directions for the robot.
+     *
+     * These directions are:
+     * - top
+     * - bottom
+     * - left
+     * - right
+     * - front
+     * - back
+     *
+     * @memberof module:vbot/controller~
+     * @return {module:vbot/controller~RobotCollisions} an object where each direction is a key and
+     *                           the values are whether there is a collision
+     *                           from that direction
+     */
     function detectCollisions() {
         var collisions = {
                 front: false,
@@ -408,13 +518,22 @@
                 bottom: false
             };
 
+        /**
+         * Given a collision that the robot is experiencing, set that that
+         * collision is occuring on the RobotCollisions object that we're
+         * building.
+         *
+         * @param {module:vbot/physics~Collision} collision a collision the robot is
+         *                                   experiencing
+
+         */
         function setCollision(collision) {
             var axis,
                 maxAxis,
                 maxAxisLength = -Infinity,
                 normal = collision.contactNormal.clone();
 
-            normal.transformDirection(VBOT.robot.matrixWorld);
+            normal.transformDirection(app.robot.matrixWorld);
 
             for (axis = 0; axis < 3; axis += 1) {
                 if (Math.abs(normal.getComponent(axis)) >
@@ -446,14 +565,16 @@
             }
         }
 
-        VBOT.robot.collisions.forEach(setCollision);
+        app.robot.collisions.forEach(setCollision);
 
         return collisions;
     }
-    
-    VBOT.controller = {
+
+    var controller = {
         init: init,
         test: test,
         step: step
     };
-}(this));
+
+    return controller;
+});

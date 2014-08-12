@@ -1,14 +1,21 @@
 /* jslint browser: true */
 /* global THREE: false, mod: true */
 
-(function (global) {
+define(['three'],
+function (THREE) {
   'use strict';
 
+  /** @exports vbot/utils */
+  var utils = {};
+
   //////////////// Convenience functions and objects ////////////////////
-  global.requestAnimationFrame = global.requestAnimationFrame ||
-                                 global.mozRequestAnimationFrame ||
-                                 global.webkitRequestAnimationFrame ||
-                                 global.msRequestAnimationFrame;
+  utils.requestAnimationFrame = window.requestAnimationFrame ||
+                                window.mozRequestAnimationFrame ||
+                                window.webkitRequestAnimationFrame ||
+                                window.msRequestAnimationFrame;
+  // If it's called with the utils context, then you get an illegal invocation
+  // error.
+  utils.requestAnimationFrame = utils.requestAnimationFrame.bind(window);
 
   // ES6 Sign function
   var isNaN = Number.isNaN;
@@ -29,18 +36,39 @@
     writable: true
   });
 
-  // A real modulo operator
+  /**
+   * A real modulo operator that works properly on negative numbers.
+   *
+   * @memberof module:vbot/utils
+   * @param  {Number} n dividend
+   * @param  {Number} d divisor
+   * @return {Number}   the result
+   */
   function mod(n, d) {
       return n - (d * Math.floor(n / d));
   }
-  global.mod = mod;
+  utils.mod = mod;
 
-  // A nice implementation of the observer pattern from
-  //  Javascript patterns by Stoyan Stefanov
+  /**
+   * The methods for the publisher pattern mixin. Taken from Javascript Patterns
+   * by Stoyan Stefanov.
+   *
+   * @memberof module:vbot/utils
+   * @mixin
+   */
   var publisher = {
       subscribers: {
           any: []
       },
+      /**
+       * Adds a listener for an event.
+       *
+       * @instance
+       * @param  {string} type          the event to fire on
+       * @param  {(string|Function)} fn the function to fire on that event
+       * @param  {Object}   context     the object to be used as the context
+       *                                upon firing
+       */
       on: function (type, fn, context) {
           type = type || 'any';
           fn = typeof fn === 'function' ? fn : context[fn];
@@ -50,9 +78,25 @@
           }
           this.subscribers[type].push({fn: fn, context: context || this});
       },
+      /**
+       * Removes a listener for an event.
+       *
+       * @instance
+       * @param  {string}   type    the event to remove the listener from
+       * @param  {Function} fn      the function to remove from that event
+       * @param  {Object}   context the object to be used as the context upon
+       *                            firing
+       */
       remove: function (type, fn, context) {
           this.visitSubscribers('unsubscribe', type, fn, context);
       },
+      /**
+       * Fires an event.
+       *
+       * @instance
+       * @param  {string} type   the event to fire
+       * @param  {*} publication the argument to pass to the listeners
+       */
       fire: function (type, publication) {
           this.visitSubscribers('publish', type, publication);
       },
@@ -74,7 +118,13 @@
       }
   };
 
-  /* exported makePublisher */
+  /**
+   * Decorates an object with the observer pattern. Taken from
+   * Javascript Patterns by Stoyan Stefanov.
+   *
+   * @memberof module:vbot/utils
+   * @param  {Object} o the object to decorate
+   */
   function makePublisher(o) {
       var i;
       for (i in publisher) {
@@ -84,34 +134,7 @@
       }
       o.subscribers = {any: []};
   }
-  global.makePublisher = makePublisher;
+  utils.makePublisher = makePublisher;
 
-  // Let's deal with the fact that we can't normally attach objects
-  //  to bones
-  THREE.Bone.prototype.update = (function () {
-      var update = THREE.Bone.prototype.update;
-      return function (parentSkinMatrix, forceUpdate) {
-          update.call(this, parentSkinMatrix, forceUpdate);
-          this.updateMatrixWorld( true );
-      };
-  }());
-
-  THREE.Object3D.prototype.update = function() {};
-
-  // World position is really nice to have
-  THREE.Object3D.prototype.positionWorld = function () {
-      return new THREE.Vector3().applyMatrix4(this.matrixWorld);
-  };
-
-  // Sometimes, we want the center more than the position
-  THREE.Object3D.prototype.centerWorld = function () {
-      var targetBox = new THREE.Box3().setFromObject(this),
-          center = new THREE.Vector3();
-
-      // Find the center of the objects bounding box
-      center.addVectors(targetBox.min, targetBox.max);
-      center.multiplyScalar(0.5);
-
-      return center;
-  };
-})(this);
+  return utils;
+});

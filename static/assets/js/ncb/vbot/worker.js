@@ -2,18 +2,27 @@
 /* global esprima, loadScript, getAction, next, completeAction, run,
           newActions, clearNewActions, _ */
 
+/** @namespace scripting */
+
 importScripts('../../lib/esprima.js');
 importScripts('../../lib/underscore.js');
 
-(function (global) {
+(function () {
     'use strict';
-    
+
     var state = null;
     var runningActions = {};
     var newActions = [];
     var states = null;
 
-    // Let's make a prototype for actions
+    /**
+     * Makes an action.
+     *
+     * @class
+     * @memberof scripting~
+     * @param {string} action the action to be performed
+     * @param {object} params parameters for the action
+     */
     var Action = function (action, params) {
         var param;
 
@@ -34,6 +43,15 @@ importScripts('../../lib/underscore.js');
         return this;
     };
 
+    /**
+     * Creates an extended action and puts it in the running actions list.
+     *
+     * @constructs ExtendedAction
+     * @memberof scripting~
+     * @augments {scripting~Action}
+     * @param {string} action the action to be performed
+     * @param {object} params parameters for the action
+     */
     var ExtendedAction = function (action, params) {
         Action.call(this, action, params);
 
@@ -42,8 +60,15 @@ importScripts('../../lib/underscore.js');
         return this;
     };
 
-    ExtendedAction.prototype = {
-        // Sets a time period for the action to take place over
+    ExtendedAction.prototype =
+    /** @lends scripting~ExtendedAction.prototype */
+    {
+        /**
+         * Sets a time period for the action to take place over.
+         *
+         * @param  {Number} seconds the time period in seconds
+         * @return {scripting~ExtendedAction} this object
+         */
         over: function (seconds) {
             // This conflicts with at, so whatever happens last
             // will take precedence
@@ -54,13 +79,28 @@ importScripts('../../lib/underscore.js');
             return this;
         },
 
-        // Switch to a new state on the completion of this action
+        /**
+         * Switch to a new state on the completion of this action
+         *
+         * @param  {(string|function)} newState the new state; if a function is
+         *                                      used, it needs to be one of the
+         *                                      top-level state functions
+         *                                      defined in the script
+         * @return {scripting~ExtendedAction}             this object
+         */
         then: function (newState) {
             this.newState = newState;
             return this;
         },
 
-        // Sets a speed for the action to be performed at
+        /**
+         * Sets a speed for the action to performed at, which is going to either
+         * be in meters per second or radians per second, depending on the
+         * action.
+         *
+         * @param  {Number} speed
+         * @return {scripting~ExtendedAction} this action
+         */
         at: function (speed) {
             // This conflicts with over, so whatever happens last
             // will take precedence
@@ -72,11 +112,21 @@ importScripts('../../lib/underscore.js');
         }
     };
 
-    function rgb2hsv () {
+    /**
+     * Converts from RGB to HSV. All parameters are assumed to be in [0,255].
+     *
+     * @param  {Number} red
+     * @param  {Number} green
+     * @param  {Number} blue
+     * @return {{h: Number,
+     *           s: Number,
+     *           v: Number}} the color in HSV representation
+     */
+    function rgb2hsv (red, green, blue) {
         var rr, gg, bb,
-            r = arguments[0] / 255,
-            g = arguments[1] / 255,
-            b = arguments[2] / 255,
+            r = red / 255,
+            g = green / 255,
+            b = blue / 255,
             h, s,
             v = Math.max(r, g, b),
             diff = v - Math.min(r, g, b),
@@ -113,16 +163,37 @@ importScripts('../../lib/underscore.js');
     }
 
     /**
-     *  Gets the pixel value at x and y, where x and y are in [-1,1].
+     * A color with multiple convenient representations.
+     *
+     * @typedef {Object} scripting~Color
+     *
+     * @property {Number} red red level from 0 to 255
+     * @property {Number} green green level from 0 to 255
+     * @property {Number} blue blue level from 0 to 255
+     * @property {Number} hue hue angle from 0 to 360
+     * @property {Number} saturation saturation from 0 to 100
+     * @property {Number} value value from 0 to 100
+     */
+
+    /**
+     * Gets the pixel value at x and y, where x and y are in [-1,1] on a
+     * Euclidean plane.
+     *
+     * @memberof scripting
+     * @param {Number} x
+     * @param {Number} y
+     * @return {scripting~Color} the color at that point, with keys red,
+     *                                green, blue, alpha, hue, saturation, and
+     *                                value
      */
     function getPixel(x, y) {
-        var pixelX = ((x + 1.0) * 0.5 * (global.sensors.camera.width - 1))|0,
-            pixelY = ((1.0 - y) * 0.5 * (global.sensors.camera.height - 1))|0,
-            index = (pixelY * global.sensors.camera.width + pixelX) * 4,
-            r = global.sensors.camera.data[index],
-            g = global.sensors.camera.data[index + 1],
-            b = global.sensors.camera.data[index + 2],
-            a = global.sensors.camera.data[index + 3],
+        var pixelX = ((x + 1.0) * 0.5 * (this.sensors.camera.width - 1))|0,
+            pixelY = ((1.0 - y) * 0.5 * (this.sensors.camera.height - 1))|0,
+            index = (pixelY * this.sensors.camera.width + pixelX) * 4,
+            r = this.sensors.camera.data[index],
+            g = this.sensors.camera.data[index + 1],
+            b = this.sensors.camera.data[index + 2],
+            a = this.sensors.camera.data[index + 3],
             hsv = rgb2hsv(r, g, b);
 
         return {
@@ -137,7 +208,11 @@ importScripts('../../lib/underscore.js');
     }
 
     /**
-     *  Turns towards the named object
+     * Turns towards the named object.
+     *
+     * @param {string} objName the object's name
+     * @memberof scripting
+     * @return {scripting~ExtendedAction} the turning action
      */
     function turnTowards(objName) {
         var action = new ExtendedAction('turnTowards', {
@@ -148,7 +223,11 @@ importScripts('../../lib/underscore.js');
     }
 
     /**
-     *  Set the walking speed. Can be negative to walk backwards.
+     * Set the walking speed. Can be negative to walk backwards.
+     *
+     * @memberof scripting
+     * @param {Number} speed the speed in m/s
+     * @return {scripting~Action} the action of setting the walking speed
      */
     function setSpeed(speed) {
         return new Action('setSpeed', {
@@ -157,7 +236,12 @@ importScripts('../../lib/underscore.js');
     }
 
     /**
-     *  Set the turning speed in radians per second. Can be negative to turn right.
+     * Set the turning speed in radians per second. Can be negative to turn
+     * right.
+     *
+     * @memberof scripting
+     * @param {Number} speed the turning speed
+     * @return {scripting~Action}      the action of beginning to turn left
      */
     function startTurningLeft(speed) {
         return new Action('turn', {
@@ -166,7 +250,12 @@ importScripts('../../lib/underscore.js');
     }
 
     /**
-     *  Set the turning speed in radians per second. Can be negative to turn left.
+     * Set the turning speed in radians per second. Can be negative to turn
+     * left.
+     *
+     * @memberof scripting
+     * @param {Number} speed the turning speed
+     * @return {scripting~Action}      the action of beginning to turn right
      */
     function startTurningRight(speed) {
         return new Action('turn', {
@@ -175,7 +264,11 @@ importScripts('../../lib/underscore.js');
     }
 
     /**
-     *  Turns left by the given number of degrees.
+     * Turns left by the given number of degrees.
+     *
+     * @memberof scripting
+     * @param {Number} degrees  the number of degrees to turn
+     * @return {scripting~ExtendedAction} the action of turning left
      */
     function turnLeft(degrees) {
         return new ExtendedAction('turnLeft', {
@@ -185,6 +278,9 @@ importScripts('../../lib/underscore.js');
 
     /**
      *  Turns right by the given number of degrees.
+     *
+     * @param {Number} degrees   the number of degrees to turn
+     * @return {scripting~ExtendedAction} the action of turning right
      */
     function turnRight(degrees) {
         return new ExtendedAction('turnRight', {
@@ -194,6 +290,10 @@ importScripts('../../lib/underscore.js');
 
     /**
      *  Go forward by the given distance.
+     *
+     * @memberof scripting
+     * @param {Number} distance the distance to go forward by
+     * @return {scripting~ExtendedAction} this action
      */
     function goForward(distance) {
         return new ExtendedAction('goForward', {
@@ -203,15 +303,23 @@ importScripts('../../lib/underscore.js');
 
     /**
      *  Go backwards by the given distance.
+     *
+     * @memberof scripting
+     * @param {Number} distance the distance to go backward by
+     * @return {scripting~ExtendedAction}
      */
     function goBackward(distance) {
-        return new ExtendedAction('turnLeft', {
-            distance: distance
+        return new ExtendedAction('goForward', {
+            distance: -distance
         });
     }
 
     /**
      *  Tries to point the right arm at the given object.
+     *
+     * @memberof scripting
+     * @param {string} objName the name of the object to point at
+     * @return {scripting~ExtendedAction} this action
      */
     function pointRightArmAt(objName) {
         return new ExtendedAction('pointArmAt', {
@@ -222,6 +330,10 @@ importScripts('../../lib/underscore.js');
 
     /**
      *  Tries to point the left arm at the given object.
+     *
+     * @memberof scripting
+     * @param {string} objName  the name of the object to point at
+     * @return {scripting~ExtendedAction} this action
      */
     function pointLeftArmAt(objName) {
         return new ExtendedAction('pointArmAt', {
@@ -231,7 +343,14 @@ importScripts('../../lib/underscore.js');
     }
 
     /**
-     *  Tries to point the left arm in the direction of the given vector.
+     *  Tries to point the left arm in the direction of the given vector of the
+     *  given coordinates. This vector starts at the shoulder joint.
+     *
+     * @memberof scripting
+     * @param {Number} x
+     * @param {Number} y
+     * @param {Number} z
+     * @return {scripting~ExtendedAction} this action
      */
     function pointRightArm(x, y, z) {
         return new ExtendedAction('pointArm', {
@@ -245,7 +364,14 @@ importScripts('../../lib/underscore.js');
     }
 
     /**
-     *  Tries to point the right arm in the direction of the given vector.
+     * Tries to point the left arm in the direction of the given vector of the
+     * given coordinates. This vector starts at the shoulder joint.
+     *
+     * @memberof scripting
+     * @param {Number} x
+     * @param {Number} y
+     * @param {Number} z
+     * @return {scripting~ExtendedAction} this action
      */
     function pointLeftArm(x, y, z) {
         return new ExtendedAction('pointArm', {
@@ -259,27 +385,37 @@ importScripts('../../lib/underscore.js');
     }
 
     /**
-     *  Changes the expression.
+     * Changes the expression.
+     *
+     * @memberof scripting
+     * @param {string} expression the expression to change to
+     * @return {scripting~ExtendedAction} this action
      */
     function changeExpression(expression) {
         return new ExtendedAction('changeExpression', {
             expression: expression
         });
     }
-    
+
     /**
      *  Grabs the object that is intersecting with the hand
      *  with the right arm
+     *
+     * @memberof scripting
+     * @return {scripting~Action} this action
      */
     function grabWithRightArm() {
         return new Action('grab', {
             arm: 'right'
         });
     }
-    
+
     /**
      *  Grabs the object that is intersecting with the hand
      *  with the left arm
+     *
+     * @memberof scripting
+     * @return {scripting~Action} this action
      */
     function grabWithLeftArm() {
         return new Action('grab', {
@@ -289,6 +425,7 @@ importScripts('../../lib/underscore.js');
 
     /**
      *  Sets the state.
+     * @memberof scripting
      */
     function next(newState) {
         if (_.isString(newState) &&
@@ -301,6 +438,21 @@ importScripts('../../lib/underscore.js');
         }
     }
 
+    /**
+     * Logs an error.
+     *
+     * @memberof scripting
+     * @param  {string} error an error message
+     */
+    function log(error) {
+        postMessage({error: error});
+    }
+
+    /**
+     * Loads a script and puts its functions into a state machine.
+     *
+     * @param  {string} script the script code
+     */
     function loadScript(script) {
         var functionBody,
             ast,
@@ -342,63 +494,61 @@ importScripts('../../lib/underscore.js');
         }
     }
 
-    Object.defineProperty(global, 'getPixel', {value: getPixel});
-    Object.defineProperty(global, 'turnTowards', {value: turnTowards});
-    Object.defineProperty(global, 'setSpeed', {value: setSpeed});
-    Object.defineProperty(global, 'startTurningLeft', {value: startTurningLeft});
-    Object.defineProperty(global, 'startTurningRight', {value: startTurningRight});
-    Object.defineProperty(global, 'turnLeft', {value: turnLeft});
-    Object.defineProperty(global, 'turnRight', {value: turnRight});
-    Object.defineProperty(global, 'goForward', {value: goForward});
-    Object.defineProperty(global, 'goBackward', {value: goBackward});
-    Object.defineProperty(global, 'pointRightArmAt', {value: pointRightArmAt});
-    Object.defineProperty(global, 'pointLeftArmAt', {value: pointLeftArmAt});
-    Object.defineProperty(global, 'pointRightArm', {value: pointRightArm});
-    Object.defineProperty(global, 'pointLeftArm', {value: pointLeftArm});
-    Object.defineProperty(global, 'changeExpression', {value: changeExpression});
-    Object.defineProperty(global, 'grabWithLeftArm', {value: grabWithLeftArm});
-    Object.defineProperty(global, 'grabWithRightArm', {value: grabWithRightArm});
-    Object.defineProperty(global, 'next', {value: next});
-    Object.defineProperty(global, 'state',
+    Object.defineProperties(this,
         {
-            get: function () { return state; }
-        });
-    Object.defineProperty(global, 'dequeue', {
-        value: newActions.shift.bind(newActions)
-    });
-    Object.defineProperty(global, 'loadScript', {
-        value: loadScript
-    });
-    Object.defineProperty(global, 'getAction', {
-        value: function (actionId) {
-            return runningActions[actionId];
-        }
-    });
-    Object.defineProperty(global, 'completeAction', {
-        value: function (actionId) {
-            delete runningActions[actionId];
-        }
-    });
-    Object.defineProperty(global, 'run', {
-        get: function () { return states[state]; }
-    });
-    Object.defineProperty(global, 'newActions', {
-        get: function () { return newActions; }
-    });
-    Object.defineProperty(global, 'clearNewActions', {
-        value: function () {
-            while (newActions.length > 0) {
-                newActions.pop();
+            'getPixel': {value: getPixel},
+            'turnTowards': {value: turnTowards},
+            'setSpeed': {value: setSpeed},
+            'startTurningLeft': {value: startTurningLeft},
+            'startTurningRight': {value: startTurningRight},
+            'turnLeft': {value: turnLeft},
+            'turnRight': {value: turnRight},
+            'goForward': {value: goForward},
+            'goBackward': {value: goBackward},
+            'pointRightArmAt': {value: pointRightArmAt},
+            'pointLeftArmAt': {value: pointLeftArmAt},
+            'pointRightArm': {value: pointRightArm},
+            'pointLeftArm': {value: pointLeftArm},
+            'changeExpression': {value: changeExpression},
+            'grabWithLeftArm': {value: grabWithLeftArm},
+            'grabWithRightArm': {value: grabWithRightArm},
+            'next': {value: next},
+            'state': {
+                get: function () { return state; }
+            },
+            'dequeue': {
+                value: newActions.shift.bind(newActions)
+            },
+            'getAction': {
+                value: function (actionId) {
+                    return runningActions[actionId];
+                    }
+            },
+            'completeAction': {
+                value: function (actionId) {
+                    delete runningActions[actionId];
+                }
+            },
+            'run': {
+                get: function () { return states[state]; }
+            },
+            'newActions': {
+                get: function () { return newActions; }
+            },
+            'clearNewActions': {
+                value: function () {
+                    while (newActions.length > 0) {
+                        newActions.pop();
+                    }
+                }
+            },
+            'log': {
+                value: log
             }
         }
-    });
-    Object.defineProperty(global, 'log', {
-        value: function (error) {
-            postMessage({error: error});
-        }
-    });
-    
-    global.addEventListener('message', function (oEvent) {
+    );
+
+    this.addEventListener('message', function (oEvent) {
         var reply = {};
 
         // If this is our first message
@@ -414,7 +564,7 @@ importScripts('../../lib/underscore.js');
             }
         } else if (oEvent.data.sensors) {
             // Make sensor data available
-            global.sensors = oEvent.data.sensors;
+            this.sensors = oEvent.data.sensors;
             // Check if any of the current actions have completed
             if (oEvent.data.actionsCompleted) {
                 oEvent.data.actionsCompleted.forEach(function (actionId) {
@@ -450,4 +600,4 @@ importScripts('../../lib/underscore.js');
             }
         }
     });
-}(self));
+}());

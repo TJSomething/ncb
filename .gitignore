@@ -2,3 +2,4 @@
 uploads/
 exports/
 #temp.json
+/static/nbproject/private/

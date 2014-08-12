@@ -1,33 +1,76 @@
 /* jslint browser: true */
-/* global THREE, $:false, _:false, Stats, console, makePublisher, async */
+/* global THREE, $:false, _:false, Stats, console */
 
-(function (global) {
+define(['three', 'stats', 'vbot/utils', 'vbot/robot', 'vbot/physics',
+        'vbot/controller', 'KMZLoader'],
+function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
     'use strict';
 
-    global.VBOT = global.VBOT ||  {};
-    
-    var VBOT = global.VBOT;
+    /**
+     * Holds the methods and state for the virtual robot component.
+     *
+     * @exports vbot/app
+     * @mixes publisher
+     * @property {Number} FPS the target frame rate
+     * @property {Object} size the size of the viewport
+     * @property {Boolean} running whether the virtual robot is paused
+     * @property {THREE.Scene} scene the scene
+     * @property {HTMLDivElement} container the div that the rendering occurs in
+     * @property {THREE.WebGLRenderer} renderer the renderer
+     * @property {Stats} renderStats displays statistics on render speed
+     * @property {Stats} logicStats displays statistics on logic speed
+     * @property {Array.<THREE.Object3D>} portables a list of the objects that
+     *                                              can be picked up.
+     * @property {THREE.Object3D} robot the robot
+     * @property {THREE.PerspectiveCamera} camera the global camera
+     * @property {THREE.OrbitControls} controls camera controls
+     * @property {Uint8Array} cameraData raw data from the camera inside the
+     *                                   robot
+     * @property {number} cameraWidth the width of the robot camera
+     * @property {number} cameraHeight the height of the robot camera
+     */
+    var app = {};
 
-    VBOT.FPS = 60;
-    VBOT.size = calcSize();
-    VBOT.running = true;
+    app.FPS = 60;
+    app.size = calcSize();
+    app.running = true;
 
-    makePublisher(VBOT);
-    
+    utils.makePublisher(app);
+
+    /**
+     * Calculates the size and aspect ratio of the viewport.
+     *
+     * @memberof module:vbot/app~
+     * @return {{width: Number,
+     *           height: Number,
+     *           aspect: Number}} an object with keys width, height, and aspect,
+     *                            which are the width in pixels, the height in
+     *                            pixels, and the aspect ratio, respectively
+     */
     function calcSize() {
         var width = window.innerWidth,
             height = window.innerHeight - $('div.navbar').outerHeight(),
             aspect = width / height;
-        
+
         return {
             width: width,
             height: height,
             aspect: aspect
         };
     }
-    window.addEventListener('resize', function () { VBOT.size = calcSize(); }, false);
+    window.addEventListener('resize', function () { app.size = calcSize(); }, false);
 
-    VBOT.showProgress = function (currentTask, subtasksLeft, subtasksTotal) {
+    /**
+     * Handles the display of the progress bar.
+     *
+     * @memberof module:vbot/app~
+     * @param  {string} currentTask   the current task to display below the
+     *                                progress bar
+     * @param  {number} subtasksLeft  the number of tasks left
+     * @param  {number} subtasksTotal the total number of tasks
+
+     */
+    function showProgress(currentTask, subtasksLeft, subtasksTotal) {
         var bar = document.getElementById('vbot-progress-bar'),
             message = document.getElementById('vbot-progress-message'),
             box = document.getElementById('vbot-progress-box'),
@@ -48,23 +91,31 @@
             }
         }
     };
-    
-    // Resizes the viewport to fill the screen under the toolbar
+
+    /**
+     * Resizes the viewport to fill the screen under the toolbar.
+     *
+     * @memberof module:vbot/app~
+     */
     function resizeViewportContainer() {
-        if (VBOT.hasOwnProperty('container')) {
-            var style = VBOT.container.style,
+        if (app.hasOwnProperty('container')) {
+            var style = app.container.style,
                 toolbarHeight = $('div.navbar').outerHeight();
 
             style.position = 'absolute';
-            style.width = VBOT.size.width + 'px';
-            style.height = VBOT.size.height + 'px';
+            style.width = app.size.width + 'px';
+            style.height = app.size.height + 'px';
             style.left = '0px';
             style.top = toolbarHeight + 'px';
         }
     }
     window.addEventListener('resize', resizeViewportContainer, false);
 
-    VBOT.initViewport = function () {
+    /**
+     * Initializes the viewport.
+     * @memberof module:vbot/app~
+     */
+    function initViewport() {
         var width, height, left, top,
             totalTasks = 6,
             tasksLeft = totalTasks,
@@ -72,20 +123,20 @@
 
         function taskDone() {
             tasksLeft -= 1;
-            VBOT.showProgress('Initializing viewport', tasksLeft, totalTasks);
+            showProgress('Initializing viewport', tasksLeft, totalTasks);
         }
 
         // Put the view pane in the right spot
-        this.container = document.createElement('div');
-        document.getElementById('vbot-body').appendChild(this.container);
+        app.container = document.createElement('div');
+        document.getElementById('vbot-body').appendChild(app.container);
         resizeViewportContainer();
 
         taskDone();
 
-        width = this.container.offsetWidth;
-        height = this.container.offsetHeight;
-        left = this.container.offsetLeft;
-        top = this.container.offsetTop;
+        width = app.container.offsetWidth;
+        height = app.container.offsetHeight;
+        left = app.container.offsetLeft;
+        top = app.container.offsetTop;
 
         // Stick the progress box in the center of the viewport
         progressBox = document.createElement('div');
@@ -96,63 +147,83 @@
                           'max="100"></progress>' +
             '</div>' +
             '<div id="vbot-progress-message"></div>';
-        this.container.appendChild(progressBox);
+        app.container.appendChild(progressBox);
         // Center it
         progressBox.style.left = width/2 - progressBox.offsetWidth/2 + 'px';
         progressBox.style.top = height/2 - progressBox.offsetHeight/2 + 'px';
 
         taskDone();
 
-        this.renderer = new THREE.WebGLRenderer({
+        app.renderer = new THREE.WebGLRenderer({
             antialias: true,
             preserveDrawingBuffer: true
         });
 
-        this.renderer.setSize(width, height);
-        this.renderer.setClearColor('#87CEEB', 1);
+        app.renderer.setSize(width, height);
+        app.renderer.setClearColor('#87CEEB', 1);
 
-        this.container.appendChild(this.renderer.domElement);
+        app.container.appendChild(app.renderer.domElement);
 
         taskDone();
 
         // FPS indicators
-        this.renderStats = new Stats();
-        this.renderStats.domElement.style.position = 'absolute';
-        this.renderStats.domElement.style.top = '0px';
-        this.renderStats.domElement.style.left = '0px';
-        this.renderStats.setMode(1);
-        this.container.appendChild(this.renderStats.domElement);
+        app.renderStats = new Stats();
+        app.renderStats.domElement.style.position = 'absolute';
+        app.renderStats.domElement.style.top = '0px';
+        app.renderStats.domElement.style.left = '0px';
+        app.renderStats.setMode(1);
+        app.container.appendChild(app.renderStats.domElement);
 
         taskDone();
 
-        this.logicStats = new Stats();
-        this.logicStats.domElement.style.position = 'absolute';
-        this.logicStats.domElement.style.top = '50px';
-        this.logicStats.domElement.style.left = '0px';
-        this.logicStats.setMode(1);
-        this.container.appendChild(this.logicStats.domElement);
+        app.logicStats = new Stats();
+        app.logicStats.domElement.style.position = 'absolute';
+        app.logicStats.domElement.style.top = '50px';
+        app.logicStats.domElement.style.left = '0px';
+        app.logicStats.setMode(1);
+        app.container.appendChild(app.logicStats.domElement);
 
         taskDone();
     };
 
-    VBOT.loadScene = function (files, character) {
+    /**
+     * Loads the scene file and the robot.
+     *
+     * @memberof module:vbot/app
+     * @param  {Array.<(string|File)>} files an array of the files and URLs to
+     *                                       load for the scene
+     * @param  {string} character            the character to load
+     */
+    app.loadScene = function (files, character) {
         var tasksLeft = 0,
             tasksTotal = 0,
             i,
             imageLibrary = {},
             sceneSource,
             sceneBuffer,
-            app = this,
             fileType = 'dae';
 
+        /**
+         * Increment the number of tasks by the number given and update the
+         * progress bar for the scene loader.
+         *
+         * @param  {number} diff the number of tasks to increment by
+
+         */
         function task(diff) {
             tasksLeft += diff;
             if (diff > 0) {
                 tasksTotal += diff;
             }
-            VBOT.showProgress('Loading scene', tasksLeft, tasksTotal);
+            showProgress('Loading scene', tasksLeft, tasksTotal);
         }
 
+        /**
+         * Load a given URL for the scene.
+         *
+         * @param  {string} url the URL
+
+         */
         function loadURL(url) {
             var xhr = new XMLHttpRequest();
 
@@ -173,7 +244,12 @@
             xhr.send();
         }
 
-        // Loads each file
+        /**
+         * Given either a file or URL, load that for the scene loader.
+         *
+         * @param  {(string|File)} file the URL or file
+
+         */
         function loadFile(file) {
             var name = file.name,
                 type = file.type,
@@ -219,7 +295,12 @@
             }
         }
 
-        // Assembles and shows the scene, if it's ready
+        /**
+         * Marks one task as completed and, if there are no tasks left,
+         * assemble and show the scene.
+         *
+
+         */
         function taskDone() {
             var imageName,
                 loader = new THREE.ColladaLoader(),
@@ -255,7 +336,7 @@
                         app.fire('scene-loaded');
                     });
                 } else if (fileType === 'kmz' && sceneBuffer) {
-                    loader = new THREE.KMZLoader(loader);
+                    loader = new KMZLoader(loader);
 
                     loader.parse(sceneBuffer, function (obj) {
                         app.scene = new THREE.Scene();
@@ -277,20 +358,30 @@
         taskDone();
     };
 
-    // This grabs and modifies objects in the scene that are important so that
-    //  the simulation can use them.
-    VBOT.readyScene = function (character) {
-        var app = this,
-            // This is so we can do a few asynchronous tasks
-            tasksLeft = 0,
+    /**
+     * Adds auxiliary information necessary for the simulation based on the
+     * objects in the scene.
+     *
+     * @memberof module:vbot/app~
+     * @param  {string} character the name of the character
+     */
+    function readyScene(character) {
+        // This is so we can do a few asynchronous tasks
+        var tasksLeft = 0,
             maxTasks = 0,
             camera,
             robot,
             light,
             taskQueue = [];
 
-        this.initViewport();
+        initViewport();
 
+        /**
+         * For auxiliary scene data creation, adds a task to a task queue and
+         * updates the progress bar.
+         *
+         * @param {function} task a function that performs a task
+         */
         function addTask(task) {
             tasksLeft += 1;
             maxTasks += 1;
@@ -302,13 +393,20 @@
                 });
             }
 
-            app.showProgress('Prepping objects', tasksLeft, maxTasks);
+            showProgress('Prepping objects', tasksLeft, maxTasks);
         }
 
-        function taskDone() {            
+        /**
+         * For auxilary scene data creation, decrements the number of tasks left
+         * and, if there are none left, then it adds the finishing touches and
+         * starts the simulation.
+         *
+
+         */
+        function taskDone() {
             tasksLeft -= 1;
 
-            app.showProgress('Prepping objects', tasksLeft, maxTasks);
+            showProgress('Prepping objects', tasksLeft, maxTasks);
 
             if (tasksLeft === 0) {
                 // If we didn't add a camera or a robot, then place them in
@@ -322,7 +420,7 @@
                 }
 
                 if (!app.camera) {
-                    camera = new THREE.PerspectiveCamera( 45, VBOT.size.aspect, 0.1, 1000 );
+                    camera = new THREE.PerspectiveCamera( 45, app.size.aspect, 0.1, 1000 );
                     camera.position.set(5, 5, 5);
                     camera.lookAt(app.robot.position);
                     // This counters the hack used for Collada cameras
@@ -343,6 +441,11 @@
             }
         }
 
+        /**
+         * Runs all of the tasks asynchronously.
+         *
+
+         */
         function runTasks() {
             taskQueue.shift().call();
             if (taskQueue.length > 0) {
@@ -350,10 +453,16 @@
             }
         }
 
+        /**
+         * Initializes the camera for the scene.
+         *
+         * @param  {THREE.Camera} obj
+
+         */
         function initCamera(obj) {
             if (obj.hasOwnProperty('aspect')) {
                 // Make sure that the camera's aspect ratio matches the window shape
-                obj.aspect = VBOT.size.aspect;
+                obj.aspect = app.size.aspect;
                 app.camera = obj;
 
                 // I have no idea why this has to be done, but
@@ -365,6 +474,12 @@
             }
         }
 
+        /**
+         * Loads the robot and adds it to the scene.
+         *
+         * @param  {THREE.Object3D} obj the robot's parent object
+
+         */
         function initRobot(obj) {
             if (obj.name === 'Robot' && !app.robot) {
                 addTask();
@@ -372,20 +487,31 @@
                 app.on('robot-ready', taskDone);
 
                 // Set up our robot
-                app.robot = new VBOT.Robot(obj, character, app);
+                app.robot = new Robot(obj, character, app);
             }
         }
 
         app.portables = [];
+        /**
+         * Initializes the auxilary data for an object that can be moved.
+         *
+         * @param  {THREE.Object3D} obj the movable object
+
+         */
         function initPortable(obj) {
             // If the word portable is in the name of the object,
             //  add it to the portable list
             if (/portable/i.test(obj.name)) {
                 app.portables.push(obj);
-                app.physics.addObject(obj, {type: 'dynamic'});
+                physics.addObject(obj, {type: 'dynamic'});
             }
         }
 
+        /**
+         * Sets up the auxiliary data to make a static object collidable.
+         *
+         * @param {THREE.Object3D} obj the collidable object
+         */
         function addCollidable(obj) {
             var isThisPortable = false,
                 ancestor = obj;
@@ -402,18 +528,45 @@
                 }
 
                 if (!isThisPortable) {
-                    app.physics.addObject(obj);
+                    physics.addObject(obj);
                 }
             }
         }
 
+        /**
+         * Fixes textures so that non-power-of-two sized textures renders by
+         * resizing them to powers of two.
+         *
+         * @param  {THREE.Object3D} obj an object to have it's textures resized
+
+         */
         function fixTextures(obj) {
+            /**
+             * Resizes an image to the next highest power of two in each
+             * dimension.
+             *
+             * @param  {HTMLImageElement} image the original image
+             * @return {HTMLImageElement}       the resized image
+             */
             function resizeNPOTImage(image) {
                 var canvas, ctx;
+                /**
+                 * Checks if a number is a power of two.
+                 *
+                 * @param  {number} x
+                 * @return {Boolean} if x is a power of two
+                 */
                 function isPowerOfTwo(x) {
                     return (x & (x - 1)) === 0;
                 }
 
+                /**
+                 * Finds the next highest power of two from a number, if that
+                 * number is not already a power of two.
+                 *
+                 * @param  {Number} x
+                 * @return {Number} the next highest power of two after x
+                 */
                 function nextHighestPowerOfTwo(x) {
                     --x;
                     for (var i = 1; i < 32; i <<= 1) {
@@ -433,6 +586,12 @@
                 return image;
             }
 
+            /**
+             * Fix all non-power-of-two textures for a material.
+             *
+             * @param  {THREE.Material} material
+
+             */
             function fixMaterial(material) {
                 ['lightMap', 'specularMap', 'envMap', 'map'].forEach(
                     function (mapType) {
@@ -461,7 +620,12 @@
             }
         }
 
-        // Asynchronously prepares an object
+        /**
+         * Queues an object to have auxiliary information added.
+         *
+         * @param  {THREE.Object3D} obj
+
+         */
         function initObject(obj) {
             addTask(function () {
                 initCamera(obj);
@@ -480,12 +644,17 @@
         setTimeout(runTasks, 0);
     };
 
-    VBOT.startLoop = function () {
-        var that = this,
-            width = this.container.offsetWidth,
-            height = this.container.offsetHeight,
+    /**
+     * Starts the event loop.
+     *
+     * @memberof module:vbot/app~
+     */
+    function startLoop() {
+        var that = app,
+            width = app.container.offsetWidth,
+            height = app.container.offsetHeight,
             dpr = window.devicePixelRatio || 1,
-            renderer = this.renderer,
+            renderer = app.renderer,
             gl = renderer.getContext(),
             views = [
                 {
@@ -493,14 +662,14 @@
                     bottom: 0,
                     width: width * dpr,
                     height: height * dpr,
-                    camera: this.camera
+                    camera: app.camera
                 },
                 {
                     left: 0,
                     bottom: 0,
                     width: 320,
                     height: 240,
-                    camera: this.robot.camera,
+                    camera: app.robot.camera,
                     postRender: (function () {
                         var arraySize, i, intView,
                             rowView1, rowView2, tempRow, rows, cols;
@@ -512,18 +681,18 @@
 
                                 arraySize = rows * cols * 4;
 
-                                VBOT.cameraData = new Uint8Array(arraySize);
-                                VBOT.cameraWidth = this.width;
-                                VBOT.cameraHeight = this.height;
+                                app.cameraData = new Uint8Array(arraySize);
+                                app.cameraWidth = this.width;
+                                app.cameraHeight = this.height;
 
-                                intView = new Uint32Array(VBOT.cameraData.buffer);
+                                intView = new Uint32Array(app.cameraData.buffer);
 
                                 tempRow = new Uint32Array(cols);
                             }
 
                             gl.readPixels(this.left, this.bottom,
                                 this.width, this.height, gl.RGBA,
-                                gl.UNSIGNED_BYTE, VBOT.cameraData);
+                                gl.UNSIGNED_BYTE, app.cameraData);
 
                             // Flip the image data
                             for (i = 0; i < rows / 2; i += 1) {
@@ -539,17 +708,17 @@
                     }())
                 }
             ];
-        
+
         function resizeRenderer () {
-            width = VBOT.size.width;
-            height = VBOT.size.height;
+            width = app.size.width;
+            height = app.size.height;
             views[0].width = width * dpr;
             views[0].height = height * dpr;
-            
+
             renderer.setSize(width, height);
-            
-            VBOT.camera.aspect = width / height;
-            VBOT.camera.updateProjectionMatrix();
+
+            app.camera.aspect = width / height;
+            app.camera.updateProjectionMatrix();
         }
         window.addEventListener('resize', resizeRenderer, false);
 
@@ -557,7 +726,7 @@
         function run() {
             var i, left, bottom, width, height;
 
-            that.renderStats.begin();
+            app.renderStats.begin();
 
             for (i = 0; i < views.length; i += 1) {
                 left = views[i].left;
@@ -569,18 +738,18 @@
                 renderer.setScissor(left, bottom, width, height);
                 renderer.enableScissorTest(true);
 
-                renderer.render(that.scene, views[i].camera);
+                renderer.render(app.scene, views[i].camera);
 
                 if (views[i].postRender) {
                     views[i].postRender();
                 }
             }
 
-            window.requestAnimationFrame(run);
+            utils.requestAnimationFrame(run);
 
-            that.renderStats.end();
+            app.renderStats.end();
 
-            that.fire('render');
+            app.fire('render');
         }
         run();
 
@@ -588,12 +757,12 @@
         (function () {
             var time = Date.now()/1000,
                 accumulator = 0,
-                tickLength = 1/that.FPS,
+                tickLength = 1/app.FPS,
                 dt = 0;
 
             window.setInterval(
                 function () {
-                    if (VBOT.running) {
+                    if (app.running) {
                         accumulator += Date.now()/1000 - time;
                         time = Date.now()/1000;
 
@@ -608,39 +777,63 @@
                             } else {
                                 accumulator -= dt;
                             }
-                            that.logicStats.begin();
-                            that.fire('logic-tick', dt);
-                            that.fire('physics-tick', dt);
-                            that.logicStats.end();
+                            app.logicStats.begin();
+                            app.fire('logic-tick', dt);
+                            app.fire('physics-tick', dt);
+                            app.logicStats.end();
                         }
                     }
                 }, tickLength);
         }());
     };
-    
-    VBOT.pause = function (pauseState) {
-        if (VBOT.hasOwnProperty('controls')) {
-            VBOT.controls.enabled = !pauseState;
+
+    /**
+     * Pauses the simulation.
+     *
+     * @memberof module:vbot/app
+     * @param  {Boolean} pauseState if it's to be paused
+     */
+    app.pause = function (pauseState) {
+        if (app.hasOwnProperty('controls')) {
+            app.controls.enabled = !pauseState;
         }
-        VBOT.running = !pauseState;
+        app.running = !pauseState;
     };
 
-    VBOT.on('scene-loaded', 'readyScene', VBOT);
+    /**
+     * Runs a test of the controller.
+     *
+     * @memberof module:vbot/app
+     */
+    app.testController = function () {
+        controller.test(app);
+    }
 
-    VBOT.on('scene-ready', 'startLoop', VBOT);
+    /**
+     * Toggles visibility of collision volumes.
+     *
+     * @memberof module:vbot/app
+     */
+    app.toggleCollisionVolumes = function () {
+        physics.toggleCollisionVolumes(app.scene);
+    }
 
-    VBOT.on('logic-tick', function (dt) {
+    app.on('scene-loaded', readyScene);
+
+    app.on('scene-ready', startLoop);
+
+    app.on('logic-tick', function (dt) {
         this.controls.update(60 * dt);
-    }, VBOT);
+    }, app);
 
-    VBOT.on('physics-tick', function (dt) {
-        VBOT.physics.updateObjects(dt);
-        VBOT.physics.detectCollisions();
-        VBOT.physics.resolveCollisions(dt);
-        VBOT.controller.step(dt);
+    app.on('physics-tick', function (dt) {
+        physics.updateObjects(dt);
+        physics.detectCollisions();
+        physics.resolveCollisions(dt);
+        controller.step();
     });
 
-    VBOT.on('render', (function () {
+    app.on('render', (function () {
         var canvas = document.createElement('canvas'),
             ctx = canvas.getContext('2d'),
             dpr = window.devicePixelRatio || 1,
@@ -652,14 +845,16 @@
 
         return function () {
             if (!imageData) {
-                canvas.height = VBOT.cameraHeight;
-                canvas.width = VBOT.cameraWidth;
+                canvas.height = app.cameraHeight;
+                canvas.width = app.cameraWidth;
                 imageData = ctx.createImageData(canvas.width, canvas.height);
             }
 
-            imageData.data.set(VBOT.cameraData);
+            imageData.data.set(app.cameraData);
             ctx.putImageData(imageData, 0, 0);
             ctx.scale(1, -1);
         };
-    }()), VBOT);
-})(this);
+    }()), app);
+
+    return app;
+});
