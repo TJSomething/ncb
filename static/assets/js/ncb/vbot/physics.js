@@ -8,11 +8,9 @@ function (THREE, numeric, _) {
     /** @exports vbot/physics */
 
     var physics = (function () {
-        var staticObjects = [],
-            dynamicObjects = [],
+        var physicsObjects = [],
             // This is used to quickly address objects
-            dynamicObjectIndices = {},
-            staticObjectIndices = {},
+            objectIndices = {},
             EPSILON = 0.000001,
             staticCollisionResolution = 0.1,
             collisionVolumeObjects = new THREE.Object3D(),
@@ -299,6 +297,7 @@ function (THREE, numeric, _) {
          * @property {Array.<module:vbot/physics~OrientedBoundingBox>} obbs all of the OBBs
          *                                                      for the object
          * @property {Number} verticalVelocity the vertical velocity in m/s
+         * @property {string} type the type of the object (static, dynamic, or ground)
          */
         /**
          * Holds the combined physical and the renderable attributes of an
@@ -370,8 +369,8 @@ function (THREE, numeric, _) {
 
             obj.physics.verticalVelocity = obj.physics.verticalVelocity || 0;
 
-            dynamicObjects.push(obj);
-            dynamicObjectIndices[obj.geometry.id] = dynamicObjects.length - 1;
+            physicsObjects.push(obj);
+            objectIndices[obj.geometry.id] = physicsObjects.length - 1;
         }
 
         /**
@@ -399,8 +398,8 @@ function (THREE, numeric, _) {
             // Static objects don't move, so they don't need updating
             obj.physics.updateBoundingSphere = function () {};
 
-            staticObjects.push(obj);
-            staticObjectIndices[obj.geometry.id] = staticObjects.length - 1;
+            physicsObjects.push(obj);
+            objectIndices[obj.geometry.id] = physicsObjects.length - 1;
 
             // Static objects don't move
             obj.physics.verticalVelocity = 0;
@@ -531,7 +530,8 @@ function (THREE, numeric, _) {
          */
         function updateObject(dt, obj) {
             // Update position and velocity
-            if (obj.physics.state === 'controlled' ||
+            if (obj.physics.type === 'dynamic' &&
+                obj.physics.state === 'controlled' ||
                 obj.physics.state === 'falling') {
                 obj.physics.verticalVelocity -= 9.8 * dt;
                 obj.geometry.position.y += dt * obj.physics.verticalVelocity;
@@ -550,8 +550,8 @@ function (THREE, numeric, _) {
             var i;
 
             // Update position and velocity
-            for (i = 0; i < dynamicObjects.length; i += 1) {
-                updateObject(dt, dynamicObjects[i]);
+            for (i = 0; i < physicsObjects.length; i += 1) {
+                updateObject(dt, physicsObjects[i]);
             }
         }
 
@@ -1627,18 +1627,18 @@ function (THREE, numeric, _) {
 
         /**
          * Takes a dynamic physics object and finds if it's colliding with
-         * any static objects.
+         * any objects.
          *
          * @memberof module:vbot/physics~
          * @param  {module:vbot/physics~CombinedPhysicsObject} obj
          * @return {module:vbot/physics~Collision[]} An array of collisions
          */
-        function detectStaticCollisions(obj) {
+        function detectObjectCollisions(obj) {
             var collision,
                 // Check if any face of any object intersects with
                 //  this object's bounding box
                 totalCollisions =
-                    staticObjects.reduce(function (collisions, obj2) {
+                    physicsObjects.reduce(function (collisions, obj2) {
                         collision = detectSingleCollision(obj, obj2);
                         if (collision !== null) {
                             collisions.push(collision);
@@ -1696,11 +1696,11 @@ function (THREE, numeric, _) {
 
             if (obj.physics.state === 'held') {
                 ancestor = obj.geometry;
-                while (!(getPhysicsObject(ancestor, 'dynamic') &&
-                    getPhysicsObject(ancestor, 'dynamic').physics.state === 'controlled')) {
+                while (!(getPhysicsObject(ancestor) &&
+                    getPhysicsObject(ancestor).physics.state === 'controlled')) {
                     ancestor = ancestor.parent;
                 }
-                ancestor = getPhysicsObject(ancestor, 'dynamic');
+                ancestor = getPhysicsObject(ancestor);
                 return ancestor;
             }
         }
@@ -1715,36 +1715,26 @@ function (THREE, numeric, _) {
             var i, j, collision, collisions;
 
             // Clear previous collisions
-            for (i = 0; i < dynamicObjects.length; i += 1) {
-                dynamicObjects[i].geometry.collisions = [];
+            for (i = 0; i < physicsObjects.length; i += 1) {
+                physicsObjects[i].geometry.collisions = [];
             }
 
             // For each dynamic object
-            for (i = 0; i < dynamicObjects.length; i += 1) {
+            for (i = 0; i < physicsObjects.length; i += 1) {
                 // Don't test objects at rest
-                if (dynamicObjects[i].physics.state !== 'rest') {
-                    // Test against static objects
-                    collisions = detectStaticCollisions(dynamicObjects[i]);
-                    if (collisions.length > 0) {
-                        dynamicObjects[i].geometry.collisions =
-                            dynamicObjects[i].geometry.collisions.concat(collisions);
-                    }
-                }
-
-                // Test against dynamic objects
-                for (j = 0; j < dynamicObjects.length; j += 1) {
-                    collision = detectSingleCollision(dynamicObjects[i],
-                                               dynamicObjects[j]);
+                if (physicsObjects[i].physics.type === 'dynamic' &&
+                    physicsObjects[i].physics.state !== 'rest') {
+                    // Test against other bjects
+                    collisions = detectObjectCollisions(physicsObjects[i]);
+                    physicsObjects[i].geometry.collisions =
+                        physicsObjects[i].geometry.collisions.concat(collisions);
+                    // Test against the ground
+                    collision = detectGroundCollision(physicsObjects[i]);
                     if (collision !== null) {
-                        dynamicObjects[i].geometry.collisions.push(collision);
+                        physicsObjects[i].geometry.collisions.push(collision);
                     }
                 }
 
-                // Test against the ground
-                collision = detectGroundCollision(dynamicObjects[i]);
-                if (collision !== null) {
-                    dynamicObjects[i].geometry.collisions.push(collision);
-                }
             }
         }
 
@@ -1763,7 +1753,10 @@ function (THREE, numeric, _) {
          * @param  {string} newState    the new state
          */
         function changeObjectState(obj, newState) {
-            getPhysicsObject(obj, 'dynamic').physics.state = newState;
+            var physObj = getPhysicsObject(obj);
+            if (physObj.physics.type === 'dynamic') {
+                getPhysicsObject(obj).physics.state = newState;
+            }
         }
 
         /**
@@ -1780,20 +1773,10 @@ function (THREE, numeric, _) {
          * @param  {string} type
          * @return {(module:vbot/physics~CombinedPhysicsObject|undefined)}
          */
-        function getPhysicsObject(obj, type) {
-            if (type === 'dynamic' &&
-                dynamicObjectIndices.hasOwnProperty(obj.id)) {
-                return dynamicObjects[dynamicObjectIndices[obj.id]];
-            }
-            if (type === 'static' &&
-                staticObjectIndices.hasOwnProperty(obj.id)) {
-                return staticObjects[staticObjectIndices[obj.id]];
-            }
-            if (type === 'ground') {
-                return undefined;
-            }
-            if (type === undefined) {
-                throw type + ' is not an object type';
+        function getPhysicsObject(obj) {
+            if (obj !== undefined &&
+                objectIndices.hasOwnProperty(obj.id)) {
+                return physicsObjects[objectIndices[obj.id]];
             }
             return undefined;
         }
@@ -1804,14 +1787,14 @@ function (THREE, numeric, _) {
          * @memberof module:vbot/physics~
          * @param  {module:vbot/physics~CombinedPhysicsObject} obj1
          * @param  {module:vbot/physics~CombinedPhysicsObject} obj2
-         * @param  {string} type
          * @return {module:vbot/physics~Collision?} a collision if there is one
          */
-        function detectCollision(obj1, obj2, type) {
-            if (type === 'static' || type === 'dynamic') {
-                return detectSingleCollision(obj1, obj2);
-            } else if (type === 'ground') {
+        function detectCollision(obj1, obj2) {
+            if (obj2 === undefined) {
                 return detectGroundCollision(obj1);
+            } else if (obj2.physics.type === 'static' ||
+                       obj2.physics.type === 'dynamic') {
+                return detectSingleCollision(obj1, obj2);
             } else {
                 throw type + ' is not an object type';
             }
@@ -1830,12 +1813,9 @@ function (THREE, numeric, _) {
              *
              * @param  {module:vbot/physics~CombinedPhysicsObject} obj         the robot
              * @param  {module:vbot/physics~CombinedPhysicsObject} otherObject
-             * @param  {string} type                       the other object's
-             *                                             type
-
              */
-            function resolveControlled(obj, otherObject, type) {
-                var newCollision = detectCollision(obj, otherObject, type),
+            function resolveControlled(obj, otherObject) {
+                var newCollision = detectCollision(obj, otherObject),
                     displacement;
 
                 // Ignore collisions with held objects
@@ -1847,7 +1827,7 @@ function (THREE, numeric, _) {
                         obj.geometry.position.y += staticCollisionResolution;
                         updateObjectLocation(obj);
                         // Run collision detection again
-                        newCollision = detectCollision(obj, otherObject, type);
+                        newCollision = detectCollision(obj, otherObject);
                         // If it can't be climbed
                         if (newCollision) {
                             // Undo the climbing
@@ -1874,11 +1854,8 @@ function (THREE, numeric, _) {
              *
              * @param  {module:vbot/physics~CombinedPhysicsObject} obj         the held object
              * @param  {module:vbot/physics~CombinedPhysicsObject} otherObject the colliding object
-             * @param  {string} type                       the type of the
-             *                                             colliding object
-
              */
-            function resolveHeld(obj, otherObject, type) {
+            function resolveHeld(obj, otherObject) {
                 // If the object is held, then we'll displace the
                 // holding object, unless the other object is
                 // the holding object
@@ -1896,7 +1873,7 @@ function (THREE, numeric, _) {
                     temp;
 
                 if (otherObject !== holder) {
-                    newCollision = detectCollision(obj, otherObject, type);
+                    newCollision = detectCollision(obj, otherObject);
                     if (newCollision) {
                         displacement = newCollision.contactNormal.clone().
                                 multiplyScalar(newCollision.penetration);
@@ -1963,11 +1940,9 @@ function (THREE, numeric, _) {
              *                                                  object
              * @param  {module:vbot/physics~CombinedPhysicsObject} otherObject the colliding
              *                                                  object
-             * @param  {string} type                            the type of
-             *                                                  the other object
              */
-            function resolveFalling(obj, otherObject, type) {
-                var newCollision = detectCollision(obj, otherObject, type),
+            function resolveFalling(obj, otherObject) {
+                var newCollision = detectCollision(obj, otherObject),
                     displacement;
 
                 if (newCollision) {
@@ -1985,30 +1960,29 @@ function (THREE, numeric, _) {
             }
 
             // If there is a collision
-            if (obj.geometry.collisions.length > 0) {
-                obj.geometry.collisions.sort(function (a, b) {
-                    return b.penetration - a.penetration;
-                });
-                obj.geometry.collisions.forEach(function (collision) {
-                    var type = collision.type,
-                        otherObject = getPhysicsObject(
-                            collision.otherObject,
-                            type);
+            if (obj.physics.type === 'dynamic' &&
+                obj.geometry.collisions.length > 0) {
+                    obj.geometry.collisions.sort(function (a, b) {
+                        return b.penetration - a.penetration;
+                    });
+                    obj.geometry.collisions.forEach(function (collision) {
+                        var otherObject = getPhysicsObject(
+                                collision.otherObject);
 
-                    updateObjectLocation(obj);
+                        updateObjectLocation(obj);
 
-                    switch (obj.physics.state) {
-                        case 'controlled':
-                            resolveControlled(obj, otherObject, type);
-                            break;
-                        case 'held':
-                            resolveHeld(obj, otherObject, type);
-                            break;
-                        case 'falling':
-                            resolveFalling(obj, otherObject, type);
-                            break;
-                    }
-                });
+                        switch (obj.physics.state) {
+                            case 'controlled':
+                                resolveControlled(obj, otherObject);
+                                break;
+                            case 'held':
+                                resolveHeld(obj, otherObject);
+                                break;
+                            case 'falling':
+                                resolveFalling(obj, otherObject);
+                                break;
+                        }
+                    });
             }
         }
 
@@ -2020,8 +1994,8 @@ function (THREE, numeric, _) {
          */
         function resolveCollisions(dt) {
             var i;
-            for (i = 0; i < dynamicObjects.length; i += 1) {
-                resolveCollision(dt, dynamicObjects[i]);
+            for (i = 0; i < physicsObjects.length; i += 1) {
+                resolveCollision(dt, physicsObjects[i]);
             }
         }
 
