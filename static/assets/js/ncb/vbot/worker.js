@@ -2,7 +2,16 @@
 /* global esprima, loadScript, getAction, next, completeAction, run,
           newActions, clearNewActions, _ */
 
-/** @namespace scripting */
+/**
+ * These are the commands used to script the robot's actions.
+ *
+ * @namespace scripting
+ */
+
+/**
+ * Holds all the sensor data.
+ * @var {module:vbot/controller~SenseData} sensors
+ */
 
 importScripts('../../lib/esprima.js');
 importScripts('../../lib/underscore.js');
