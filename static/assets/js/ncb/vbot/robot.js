@@ -1,8 +1,8 @@
 /* jslint browser: true */
 /* global THREE, _:false, console */
 
-define(['three', 'vbot/physics'],
-function (THREE, physics) {
+define(['three', 'vbot/physics', 'vbot/motion'],
+function (THREE, physics, motion) {
     'use strict';
 
     /** @exports vbot/Robot */
@@ -293,6 +293,146 @@ function (THREE, physics) {
             } else {
                 return false;
             }
+        },
+        
+        stepHandTowardsTarget: function (arm, deltaS, deltaR, targetPos) {
+            var isLeft = (arm[0] === 'l' || arm[0] === 'L'),
+                sideName = isLeft ? 'left' : 'right',
+                shoulder = isLeft ? this.larm : this.rarm,
+                shoulderMat = shoulder.matrix,
+                elbow = shoulder.children[0],
+                wrist = elbow.children[0],
+                elbowMat = elbow.matrix,
+                wristMat = wrist.matrix,
+                handMat = wrist.matrixWorld,
+                upperArmLength = elbow.matrix.elements[12],
+                lowerArmLength = wrist.matrix.elements[12],
+                torsoMat = new THREE.Matrix4().getInverse(shoulder.parent.matrixWorld),
+                localTargetWristPos = targetPos.clone().applyMatrix4(torsoMat).multiplyScalar(1),
+                // Just for testing purposes
+                localTargetPalmPos = localTargetWristPos.clone(),
+                localPalmPos = new THREE.Vector3(0, -3, 0),
+                i, j, lastVal,
+                newConfig,
+                lastDist, currentDist;
+                
+            var lowerLimit = [-0.5, -0.4, -0.4, -0.75, 0, -0.4, -0.25];
+            var upperLimit = [0.5, 0.4, 0.4, 0, 0.5, 0.4, 0.25];
+            
+            /**
+             * Clamps the values of this config in place.
+             */
+            function clampConfig(config) {
+                for (i = 0; i < 7; i += 1) {
+                    config[i] = THREE.Math.clamp(config[i],
+                                    lowerLimit[i]*Math.PI,
+                                    upperLimit[i]*Math.PI);
+                }
+                
+                return config;
+            }
+            
+            function randomConfig() {
+                var config = new Array(7);
+                for (i = 0; i < 7; i += 1) {
+                    config[i] = Math.PI * (
+                                    Math.random() *
+                                    (upperLimit[i] - lowerLimit[i]) +
+                                    lowerLimit[i]);
+                }
+                
+                return config;
+            }
+            
+            function distanceToGoal(config) {
+                return motion.handDist(shoulderMat,
+                                       upperArmLength,
+                                       lowerArmLength,
+                                       localPalmPos,
+                                       localTargetWristPos,
+                                       localTargetPalmPos,
+                                       config);
+            }
+            
+            function stepTowardsGoal(config) {
+                return motion.stepConfig(shoulderMat,
+                                         config,
+                                         deltaS,
+                                         upperArmLength,
+                                         lowerArmLength,
+                                         localPalmPos,
+                                         localTargetWristPos,
+                                         localTargetPalmPos)
+            }
+              
+            // Make sure our configuration and targeting data is initialized
+            if (this.planningData === undefined) {
+                this.planningData = {};
+            }
+            if (this.planningData[sideName] === undefined) {
+                this.planningData[sideName] = {
+                    config: motion.calcConfig(shoulderMat, elbowMat, wristMat)
+                };
+            }
+            var plan = this.planningData[sideName];
+            // If the target has changed or has never been set, update the target
+            // and reset the best config and distance for the best config
+            if (plan.targetWristPos === undefined ||
+                plan.targetPalmPos === undefined ||
+                !plan.targetWristPos.equals(localTargetWristPos) ||
+                !plan.targetPalmPos.equals(localTargetPalmPos)) {
+                plan.targetWristPos = localTargetWristPos;
+                plan.targetPalmPos = localTargetPalmPos;
+                plan.bestConfig = plan.config.slice(0);
+                plan.bestDist = distanceToGoal(plan.config);
+            }
+            
+            // Spend 10 ms searching for a better target configuration
+            var startTime = Date.now();
+            while (Date.now() - startTime < 10) {
+                // Inspired by Weghe, et al.'s JT-RRT algorithm
+                if (Math.random() < 0.5) {
+                    newConfig = randomConfig();
+                } else {
+                    newConfig = stepTowardsGoal(plan.bestConfig);
+                }
+                // Make sure the new config is valid
+                clampConfig(newConfig);
+                // If the new configuration's workspace distance is closer
+                // than the previous best found, then keep that
+                currentDist = distanceToGoal(newConfig);
+                if (currentDist < plan.bestDist) {
+                    plan.bestConfig = newConfig.slice(0);
+                    plan.bestDist = currentDist;
+                }
+            }
+            
+            // Move toward the best configuration
+            var configDist = 0;
+            var configDiff = new Array(7);
+            for (i = 0; i < 7; i += 1) {
+                configDiff[i] = plan.bestConfig[i] - plan.config[i]
+                configDist += Math.pow(configDiff[i], 2);
+            }
+            configDist = Math.sqrt(configDist);
+            if (configDist > 0) {
+                for (i = 0; i < 7; i += 1) {    
+                    plan.config[i] += configDiff[i] / configDist * deltaR;
+                }
+            }
+            clampConfig(plan.config);
+            
+            var newMatrices = motion.configToMatrices(shoulderMat,
+                                                      upperArmLength,
+                                                      lowerArmLength,
+                                                      plan.config);
+            
+            shoulder.matrixAutoUpdate = false;
+            elbow.matrixAutoUpdate = false;
+            wrist.matrixAutoUpdate = false;
+            shoulderMat.copy(newMatrices.shoulder);
+            elbowMat.copy(newMatrices.elbow);
+            wristMat.copy(newMatrices.wrist);
         }
     }
 
@@ -838,6 +978,12 @@ function (THREE, physics) {
                         break;
                     case 68: // D
                         robot.angularVelocity = -1;
+                        break;
+                    case 69: // E
+                        robot.stepHandTowardsTarget('r',
+                            0.0001,
+                            1/30,
+                            robot.app.scene.getObjectByName('portable_table', true).positionWorld());
                         break;
                 }
             }, false );
