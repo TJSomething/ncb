@@ -121,6 +121,15 @@ var("shoulder_z")
 var("l_4")
 var("l_5")
 
+# <markdowncell>
+
+# We're making assumptions about the model geometry here. We assume that the x-axis is used to
+# displace the elbow from the shoulder and the wrist from the elbow. We also assume that, in
+# the elbow's coordinate system the arm is bending in the XZ-plane and the wrist twists in
+# the YZ-plane.
+
+# <codecell>
+
 R = [Matrix([[1, 0, 0, shoulder_x],
              [0, 1, 0, shoulder_y],
              [0, 0, 1, shoulder_z],
