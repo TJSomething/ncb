@@ -318,6 +318,9 @@ function (THREE, physics, motion) {
          * @param {THREE.Vector3} targetPalmPos the location to
          *                          move the palm toward in
          *                          world space
+         * @param {THREE.Vector3} targetCenterPos the location
+         *                          at the center of the object
+         *                          we're reaching for
          * @return {string} the status of moving the arm, which
          *                  can be one of three values: success,
          *                  failure, and moving
@@ -326,7 +329,8 @@ function (THREE, physics, motion) {
                                          planningStepSize,
                                          motionStepSize,
                                          targetWristPos,
-                                         targetPalmPos) {
+                                         targetPalmPos,
+                                         targetCenterPos) {
             var isLeft = (arm[0] === 'l' || arm[0] === 'L'),
                 sideName = isLeft ? 'left' : 'right',
                 shoulder = isLeft ? this.larm : this.rarm,
@@ -341,6 +345,7 @@ function (THREE, physics, motion) {
                 torsoMat = new THREE.Matrix4().getInverse(shoulder.parent.matrixWorld),
                 localTargetWristPos = targetWristPos.clone().applyMatrix4(torsoMat),
                 localTargetPalmPos = targetPalmPos.clone().applyMatrix4(torsoMat),
+                localTargetCenterPos = targetCenterPos.clone().applyMatrix4(torsoMat),
                 localPalmPos = new THREE.Vector3(0, -3, 0),
                 i, j, lastVal,
                 newConfig,
@@ -405,14 +410,20 @@ function (THREE, physics, motion) {
                 };
             }
             var plan = this.planningData[sideName];
+            // Compensate for rounding errors in the position of the robot
+            if (plan.targetCenterPos !== undefined &&
+                plan.targetCenterPos.distanceTo(localTargetCenterPos) < 0.0001) {
+                    plan.targetCenterPos = localTargetCenterPos;
+                }
             // If the target has changed or has never been set, update the target
             // and reset the best config and distance for the best config
             if (plan.targetWristPos === undefined ||
                 plan.targetPalmPos === undefined ||
-                !plan.targetWristPos.equals(localTargetWristPos) ||
-                !plan.targetPalmPos.equals(localTargetPalmPos)) {
+                plan.targetCenterPos === undefined ||
+                !plan.targetCenterPos.equals(localTargetCenterPos)) {
                 plan.targetWristPos = localTargetWristPos;
                 plan.targetPalmPos = localTargetPalmPos;
+                plan.targetCenterPos = localTargetCenterPos;
                 plan.bestConfig = plan.config.slice(0);
                 plan.bestDist = distanceToGoal(plan.config);
             }
@@ -445,11 +456,14 @@ function (THREE, physics, motion) {
                 configDist += Math.pow(configDiff[i], 2);
             }
             configDist = Math.sqrt(configDist);
-            if (configDist > 0) {
-                for (i = 0; i < 7; i += 1) {    
-                    plan.config[i] += configDiff[i] / configDist *
-                        motionStepSize;
-                }
+            // Calculate the percentage of the distance to move.
+            // If a step would take us past our target, then just
+            // take us to the target
+            var amountToMove = configDist > motionStepSize ?
+                motionStepSize/configDist :
+                1;
+            for (i = 0; i < 7; i += 1) {    
+                plan.config[i] += configDiff[i] * amountToMove;
             }
             clampConfig(plan.config);
             
@@ -1006,6 +1020,26 @@ function (THREE, physics, motion) {
             robot.move = move;
 
             robot.app.on('logic-tick', robot.move, robot);
+            
+            function findGraspingLocation(arm, target) {
+                var isLeft = arm.toLowerCase()[0] === 'l',
+                    armObj = isLeft ? robot.larm : robot.rarm,
+                    targetObj = robot.app.scene.getObjectByName('portable_table', true),
+                    wristPos = robot.calculateHandLocation(armObj),
+                    palmSphere = new THREE.Box3().
+                        setFromObject(targetObj).
+                        getBoundingSphere(),
+                    wristSphere = new THREE.Sphere(palmSphere.center,
+                        palmSphere.radius + 0.03),
+                    targetPalmPos = palmSphere.clampPoint(wristPos),
+                    targetWristPos = wristSphere.clampPoint(wristPos);
+                
+                return {
+                    wrist: targetWristPos,
+                    palm: targetPalmPos,
+                    center: palmSphere.center
+                };
+            }
 
             document.addEventListener( 'keydown', function (event) {
                 if (event.altKey) {
@@ -1026,11 +1060,13 @@ function (THREE, physics, motion) {
                         robot.angularVelocity = -1;
                         break;
                     case 69: // E
-                        robot.stepHandTowardsTarget('r',
+                        var target = findGraspingLocation('r', 'portable_table')
+                        console.log(robot.stepHandTowardsTarget('r',
                             0.0001,
                             1/30,
-                            robot.app.scene.getObjectByName('portable_table', true).positionWorld(),
-                            robot.app.scene.getObjectByName('portable_table', true).positionWorld());
+                            target.wrist,
+                            target.palm,
+                            target.center));
                         break;
                 }
             }, false );
