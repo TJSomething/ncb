@@ -40,16 +40,24 @@ requirejs.config({
 
 requirejs(['jquery', 'vbot/app'], function ($, VBOT) {
 	'use strict';
+    
+    var startedLoading = false;
 
 	$().ready( function() {
 		$('#vbot-file').on('change', function () {
-			var character = $('input[name=vbot-character]:checked').val();
-			VBOT.loadScene(this.files, character);
+            if (!startedLoading) {
+                var character = $('input[name=vbot-character]:checked').val();
+                VBOT.loadScene(this.files, character);
+                startedLoading = true;
+            }
 		});
 
 		$('#vbot-test').on('click', function () {
-			var character = $('input[name=vbot-character]:checked').val();
-			VBOT.loadScene(['assets/kmz/test.kmz'], character);
+            if (!startedLoading) {
+                var character = $('input[name=vbot-character]:checked').val();
+                VBOT.loadScene(['assets/kmz/test.kmz'], character);   
+                startedLoading = true;
+            }
 		});
 
 		$('#mainNav a').click(function() {
