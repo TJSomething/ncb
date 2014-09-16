@@ -295,7 +295,38 @@ function (THREE, physics, motion) {
             }
         },
         
-        stepHandTowardsTarget: function (arm, deltaS, deltaR, targetPos) {
+        /**
+         * Moves the hand toward a target position.
+         *
+         * TODO: parameterize or derive:
+         *  - palm position
+         *  - joint limits
+         *  - distance threshold
+         *  - model scale
+         *
+         * @instance
+         * @param {string} arm the name of the arm to move
+         * @param {Number} planningStepSize the distance to move
+         *                                  the target configuration
+         *                                  while hill climbing;
+         *                                  units are in cm
+         * @param {Number} motionStepSize the angle to move the
+         *                                joints; in radians
+         * @param {THREE.Vector3} targetWristPos the location to
+         *                          move the wrist toward in
+         *                          world space
+         * @param {THREE.Vector3} targetPalmPos the location to
+         *                          move the palm toward in
+         *                          world space
+         * @return {string} the status of moving the arm, which
+         *                  can be one of three values: success,
+         *                  failure, and moving
+         */
+        stepHandTowardsTarget: function (arm,
+                                         planningStepSize,
+                                         motionStepSize,
+                                         targetWristPos,
+                                         targetPalmPos) {
             var isLeft = (arm[0] === 'l' || arm[0] === 'L'),
                 sideName = isLeft ? 'left' : 'right',
                 shoulder = isLeft ? this.larm : this.rarm,
@@ -308,9 +339,8 @@ function (THREE, physics, motion) {
                 upperArmLength = elbow.matrix.elements[12],
                 lowerArmLength = wrist.matrix.elements[12],
                 torsoMat = new THREE.Matrix4().getInverse(shoulder.parent.matrixWorld),
-                localTargetWristPos = targetPos.clone().applyMatrix4(torsoMat).multiplyScalar(1),
-                // Just for testing purposes
-                localTargetPalmPos = localTargetWristPos.clone(),
+                localTargetWristPos = targetWristPos.clone().applyMatrix4(torsoMat),
+                localTargetPalmPos = targetPalmPos.clone().applyMatrix4(torsoMat),
                 localPalmPos = new THREE.Vector3(0, -3, 0),
                 i, j, lastVal,
                 newConfig,
@@ -357,7 +387,7 @@ function (THREE, physics, motion) {
             function stepTowardsGoal(config) {
                 return motion.stepConfig(shoulderMat,
                                          config,
-                                         deltaS,
+                                         planningStepSize,
                                          upperArmLength,
                                          lowerArmLength,
                                          localPalmPos,
@@ -417,7 +447,8 @@ function (THREE, physics, motion) {
             configDist = Math.sqrt(configDist);
             if (configDist > 0) {
                 for (i = 0; i < 7; i += 1) {    
-                    plan.config[i] += configDiff[i] / configDist * deltaR;
+                    plan.config[i] += configDiff[i] / configDist *
+                        motionStepSize;
                 }
             }
             clampConfig(plan.config);
@@ -433,6 +464,21 @@ function (THREE, physics, motion) {
             shoulderMat.copy(newMatrices.shoulder);
             elbowMat.copy(newMatrices.elbow);
             wristMat.copy(newMatrices.wrist);
+            
+            // If we've reached our target configuration and
+            // the hand is close enough to the target, then
+            // we're done
+            if (configDist === 0) {
+                if (plan.bestDist < 20) {
+                    return 'success';
+                } else {
+                    // If we're not close enough, the we've failed
+                    return 'failure';
+                }
+            } else {
+                // If we're not there yet, we're still moving
+                return 'moving';
+            }
         }
     }
 
@@ -983,6 +1029,7 @@ function (THREE, physics, motion) {
                         robot.stepHandTowardsTarget('r',
                             0.0001,
                             1/30,
+                            robot.app.scene.getObjectByName('portable_table', true).positionWorld(),
                             robot.app.scene.getObjectByName('portable_table', true).positionWorld());
                         break;
                 }
