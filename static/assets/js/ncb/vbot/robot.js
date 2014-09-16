@@ -334,7 +334,8 @@ function (THREE, physics) {
                     larm = steve.getObjectByName('uarm.L', true),
                     forearmLength = 0.518,
                     heldObjects = {right: null, left: null},
-                    scale = 2/3;
+                    scale = 2/3,
+                    bounds;
 
                 // For some weird reason, Steve is the wrong size.
                 steve.scale.set(scale, scale, scale);
@@ -714,6 +715,8 @@ function (THREE, physics) {
             robot.app = app;
             // Put the robot into the scene
             app.scene.add(robot);
+            // Odometer!
+            robot.odometer = 0;
 
             // Load the robot model asynchronously
             modelLoaders[robotType](robot);
@@ -729,9 +732,11 @@ function (THREE, physics) {
                 var model = new THREE.Vector3(0, 0, displacement),
                     world = model.applyQuaternion(this.quaternion);
 
+
                 this.animateWalking(displacement);
                 this.position.add(world);
-            };
+                this.odometer += displacement;
+            }
             robot.instantForward = instantForward;
 
             /**

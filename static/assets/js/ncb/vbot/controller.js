@@ -1,7 +1,6 @@
 /* jslint browser: true */
 /* global THREE, $:false, _:false, console, mod */
 
-// Note that this depends on the the robot being loaded
 define(['three', 'vbot/utils'],
 function (THREE, utils) {
     'use strict';
@@ -103,6 +102,45 @@ function (THREE, utils) {
     }
 
     /**
+     * Holds all of the sensor data.
+     *
+     * @typedef SenseData
+     * @memberof module:vbot/controller~
+     * @property {number} speed the current speed in m/s
+     * @property {number} angularVelocity the current angular velocity in
+     *                                    radians per second
+     * @property {number} odometer the distance travelled in meters
+     * @property {number} compass the current faced angle in degrees as a
+     *                            header
+     * @property {object} arms
+     * @property {object} arms.left
+     * @property {string} arms.left.held the name of the object in the left
+     *                                   hand
+     * @property {object} arms.right
+     * @property {string} arms.right.held the name of the object in the left
+     *                                    hand
+     * @property {string} expression the current expression
+     * @property {object} camera
+     * @property {Int8Buffer} camera.data the raw RGBA camera data
+     * @property {number} camera.height the height of the camera image
+     * @property {number} camera.width the width of the image
+     * @property {object} collision the collision data for each side
+     *                              of the robot
+     * @property {boolean} collision.top whether there is a collision on the
+     *                                   top
+     * @property {boolean} collision.bottom whether there is a collision on the
+     *                                      bottom
+     * @property {boolean} collision.left whether there is a collision on the
+     *                                    left
+     * @property {boolean} collision.right whether there is a collision on the
+     *                                     right
+     * @property {boolean} collision.front whether there is a collision on the
+     *                                     front
+     * @property {boolean} collision.back whether there is a collision on the
+     *                                    back
+     */
+
+    /**
      * Builds an object containing all the sensor data.
      *
      * Existing sensors are:
@@ -134,8 +172,7 @@ function (THREE, utils) {
         if (capabilities.motion) {
             sensors.speed = robot.speed;
             sensors.angularVelocity = robot.angularVelocity;
-            // TODO: Add odometer
-            //sensors.odometer = robot.odometer;
+            sensors.odometer = robot.odometer;
             sensors.compass = mod(90 - (robot.rotation.y * 180 / Math.PI), 360);
         }
 
