@@ -14,7 +14,8 @@ function (THREE, numeric, _) {
             EPSILON = 0.000001,
             staticCollisionResolution = 0.1,
             collisionVolumeObjects = new THREE.Object3D(),
-            groundElevation = Infinity;
+            groundElevation = Infinity,
+            robot;
 
         /**
          * Creates an OBB
@@ -338,6 +339,7 @@ function (THREE, numeric, _) {
 
             if (obj.physics.state === "controlled") {
                 obj.physics.obbs = buildRobotOBBs(obj.geometry);
+                robot = obj;
             } else {
                 obj.physics.obbs =
                     [function () {
@@ -1682,30 +1684,6 @@ function (THREE, numeric, _) {
         }
 
         /**
-         * If this object is held, then find the holding object, which
-         * should be the robot. I'm not sure why this exists. If the object
-         * is not held, then return undefined.
-         *
-         * @memberof module:vbot/physics~
-         * @param  {module:vbot/physics~CombinedPhysicsObject} obj       the held object
-         * @return {(module:vbot/physics~CombinedPhysicsObject|undefined)} the holding object, if
-         *                                                there is one
-         */
-        function getHoldingObject(obj) {
-            var ancestor;
-
-            if (obj.physics.state === 'held') {
-                ancestor = obj.geometry;
-                while (!(getPhysicsObject(ancestor) &&
-                    getPhysicsObject(ancestor).physics.state === 'controlled')) {
-                    ancestor = ancestor.parent;
-                }
-                ancestor = getPhysicsObject(ancestor);
-                return ancestor;
-            }
-        }
-
-        /**
          * Finds all of the collisions and attaches them to the geometries of
          * of the colliding CombinedPhysicsObjects.
          *
@@ -1823,7 +1801,8 @@ function (THREE, numeric, _) {
                     (newCollision.type === 'ground' ||
                      otherObject.physics.state !== 'held')) {
                     // If it's a horizontal collision, check if the object can be climbed
-                    if (newCollision.contactNormal.y === 0) {
+                    if (newCollision.contactNormal.y < newCollision.contactNormal.x +
+                                                       newCollision.contactNormal.z) {
                         obj.geometry.position.y += staticCollisionResolution;
                         updateObjectLocation(obj);
                         // Run collision detection again
@@ -1859,7 +1838,7 @@ function (THREE, numeric, _) {
                 // If the object is held, then we'll displace the
                 // holding object, unless the other object is
                 // the holding object
-                var holder = getHoldingObject(obj),
+                var holder = robot,
                     shoulder = obj.geometry.parent.parent,
                     newCollision,
                     displacement,
