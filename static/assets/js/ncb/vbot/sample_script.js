@@ -14,18 +14,13 @@ function goingToTable () {
     // Check if we've hit anything yet
     if (sensors.collision.front === true) {
         setSpeed(0.0);
-        next('pointToTable');
+        next('grabTable');
     }
 }
 
-function pointToTable () {
-    pointRightArmAt('portable_table').then('grabTable');
-    next('wait');
-}
-
 function grabTable () {
-    grabWithRightArm();
-    next(didWeGrabTheTable);
+    reachForAndGrabWithRightHand('portable_table').then('didWeGrabTheTable');
+    next('wait');
 }
 
 function didWeGrabTheTable () {
@@ -36,6 +31,9 @@ function didWeGrabTheTable () {
             over(1.0).                // Over a second
             then('searchForRoad');
         //setExpression('smile');
+        next('wait');
+    } else {
+        log(JSON.stringify(sensors.arms));
         next('wait');
     }
 }

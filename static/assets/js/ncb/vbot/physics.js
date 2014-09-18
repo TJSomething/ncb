@@ -12,7 +12,7 @@ function (THREE, numeric, _) {
             // This is used to quickly address objects
             objectIndices = {},
             EPSILON = 0.000001,
-            staticCollisionResolution = 0.1,
+            staticCollisionResolution = 1,
             collisionVolumeObjects = new THREE.Object3D(),
             groundElevation = Infinity,
             robot;
@@ -246,14 +246,14 @@ function (THREE, numeric, _) {
         function calcOBBVertices(obb) {
             var mat = makeOBBMatrix(obb),
                 Vec = function (x,y,z) { return new THREE.Vector3(x,y,z); },
-                startVertices = [Vec(-0.5, -0.5, -0.5),
-                                 Vec(-0.5, -0.5, +0.5),
-                                 Vec(-0.5, +0.5, -0.5),
-                                 Vec(-0.5, +0.5, +0.5),
-                                 Vec(+0.5, -0.5, -0.5),
-                                 Vec(+0.5, -0.5, +0.5),
-                                 Vec(+0.5, +0.5, -0.5),
-                                 Vec(+0.5, +0.5, +0.5)],
+                startVertices = [Vec(-1, -1, -1),
+                                 Vec(-1, -1, +1),
+                                 Vec(-1, +1, -1),
+                                 Vec(-1, +1, +1),
+                                 Vec(+1, -1, -1),
+                                 Vec(+1, -1, +1),
+                                 Vec(+1, +1, -1),
+                                 Vec(+1, +1, +1)],
                 transformedVerts = startVertices.map(function(vert) {
                     return vert.applyMatrix4(mat);
                 });
@@ -361,7 +361,7 @@ function (THREE, numeric, _) {
             }
             obj.physics.obbs.forEach(function (obb) {
                 collisionVolumeObjects.add(OBBHelper(obb));
-            });
+            });            
 
             obj.physics.boundingSphere = calcBoundingSphereFromOBBs(obj.physics.obbs);
 

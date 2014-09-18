@@ -38,7 +38,7 @@ requirejs.config({
     }
 });
 
-requirejs(['jquery', 'vbot/app'], function ($, VBOT) {
+requirejs(['jquery', 'vbot/app', 'vbot/controller'], function ($, VBOT, controller) {
 	'use strict';
     
     var startedLoading = false;
@@ -70,6 +70,45 @@ requirejs(['jquery', 'vbot/app'], function ($, VBOT) {
 	} );
 
 	VBOT.on('scene-loaded', function () {
-		$('div #vbot-options').hide();
+        document.addEventListener( 'keydown', function (event) {
+            if (event.altKey) {
+                return;
+            }
+
+            switch (event.keyCode) {
+                case 83: // S
+                    VBOT.robot.speed = -1.7;
+                    break;
+                case 87: // W
+                    VBOT.robot.speed = 1.7;
+                    break;
+                case 65: // A
+                    VBOT.robot.angularVelocity = 1;
+                    break;
+                case 68: // D
+                    VBOT.robot.angularVelocity = -1;
+                    break;
+            }
+        }, false );
+        document.addEventListener( 'keyup', function (event) {
+            switch (event.keyCode) {
+                case 83: // S
+                    VBOT.robot.speed = 0;
+                    break;
+                case 87: // W
+                    VBOT.robot.speed = 0;
+                    break;
+                case 65: // A
+                    VBOT.robot.angularVelocity = 0;
+                    break;
+                case 68: // D
+                    VBOT.robot.angularVelocity = 0;
+                    break;
+                case 69: // E
+                    controller.test(VBOT);
+            }
+        }, false );
+
+        $('div #vbot-options').hide();
 	});
 });

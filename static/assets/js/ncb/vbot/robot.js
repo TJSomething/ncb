@@ -69,6 +69,12 @@ function (THREE, physics, motion) {
                     target.rotation,
                     target.scale);
 
+            // Note that we grabbed the object
+            if (isLeft) {
+                this.heldObjects.left = target;
+            } else {
+                this.heldObjects.right = target;
+            }
             // Note that we should do collision detection for this
             physics.changeObjectState(target, 'held');
         },
@@ -200,9 +206,9 @@ function (THREE, physics, motion) {
                      upVector,
                      thirdBasis];
             // Reorder depending on model
-            b = [b[this.matrixOrder[0]],
-                 b[this.matrixOrder[1]],
-                 b[this.matrixOrder[2]]];
+            b = [b[this.armMatrixOrder[0]],
+                 b[this.armMatrixOrder[1]],
+                 b[this.armMatrixOrder[2]]];
             rotMatrix = new THREE.Matrix4(
                 b[0].x, b[1].x, b[2].x, 0,
                 b[0].y, b[1].y, b[2].y, 0,
@@ -282,12 +288,6 @@ function (THREE, physics, motion) {
 
             if (intersectingObj !== undefined) {
                 this.grab(intersectingObj, arm);
-
-                if (arm[0] === 'l' || arm[0] === 'L') {
-                    this.heldObjects.left = intersectingObj;
-                } else {
-                    this.heldObjects.right = intersectingObj;
-                }
 
                 return true;
             } else {
@@ -1021,72 +1021,6 @@ function (THREE, physics, motion) {
 
             robot.app.on('logic-tick', robot.move, robot);
             
-            function findGraspingLocation(arm, target) {
-                var isLeft = arm.toLowerCase()[0] === 'l',
-                    armObj = isLeft ? robot.larm : robot.rarm,
-                    targetObj = robot.app.scene.getObjectByName('portable_table', true),
-                    wristPos = robot.calculateHandLocation(armObj),
-                    palmSphere = new THREE.Box3().
-                        setFromObject(targetObj).
-                        getBoundingSphere(),
-                    wristSphere = new THREE.Sphere(palmSphere.center,
-                        palmSphere.radius + 0.03),
-                    targetPalmPos = palmSphere.clampPoint(wristPos),
-                    targetWristPos = wristSphere.clampPoint(wristPos);
-                
-                return {
-                    wrist: targetWristPos,
-                    palm: targetPalmPos,
-                    center: palmSphere.center
-                };
-            }
-
-            document.addEventListener( 'keydown', function (event) {
-                if (event.altKey) {
-                    return;
-                }
-
-                switch (event.keyCode) {
-                    case 83: // S
-                        robot.speed = -1.7;
-                        break;
-                    case 87: // W
-                        robot.speed = 1.7;
-                        break;
-                    case 65: // A
-                        robot.angularVelocity = 1;
-                        break;
-                    case 68: // D
-                        robot.angularVelocity = -1;
-                        break;
-                    case 69: // E
-                        var target = findGraspingLocation('r', 'portable_table')
-                        console.log(robot.stepHandTowardsTarget('r',
-                            0.0001,
-                            1/30,
-                            target.wrist,
-                            target.palm,
-                            target.center));
-                        break;
-                }
-            }, false );
-            document.addEventListener( 'keyup', function (event) {
-                switch (event.keyCode) {
-                    case 83: // S
-                        robot.speed = 0;
-                        break;
-                    case 87: // W
-                        robot.speed = 0;
-                        break;
-                    case 65: // A
-                        robot.angularVelocity = 0;
-                        break;
-                    case 68: // D
-                        robot.angularVelocity = 0;
-                        break;
-                }
-            }, false );
-
             // Properties
             robot.speed = 0;
             robot.angularVelocity = 0;

@@ -173,7 +173,7 @@ function (THREE, utils) {
             sensors.speed = robot.speed;
             sensors.angularVelocity = robot.angularVelocity;
             sensors.odometer = robot.odometer;
-            sensors.compass = mod(90 - (robot.rotation.y * 180 / Math.PI), 360);
+            sensors.compass = utils.mod(90 - (robot.rotation.y * 180 / Math.PI), 360);
         }
 
         if (capabilities.pickUp) {
@@ -388,6 +388,26 @@ function (THREE, utils) {
         }
     }
 
+    function findGraspingLocation(arm, target) {
+        var isLeft = arm.toLowerCase()[0] === 'l',
+            armObj = isLeft ? robot.larm : robot.rarm,
+            targetObj = robot.app.scene.getObjectByName(target, true),
+            wristPos = robot.calculateHandLocation(armObj),
+            palmSphere = new THREE.Box3().
+                setFromObject(targetObj).
+                getBoundingSphere(),
+            wristSphere = new THREE.Sphere(palmSphere.center,
+                palmSphere.radius + 0.03),
+            targetPalmPos = palmSphere.clampPoint(wristPos),
+            targetWristPos = wristSphere.clampPoint(wristPos);
+
+        return {
+            wrist: targetWristPos,
+            palm: targetPalmPos,
+            center: palmSphere.center
+        };
+    }
+
     /**
      * Given an action in progress, actuate the robot over one time step,
      * executing a portion of that action.
@@ -486,7 +506,6 @@ function (THREE, utils) {
                 }
                 break;
             case 'grab':
-                console.log('go');
                 robot.pickUpAtHand(action.arm);
                 actionsCompleted.push(action.id);
                 break;
@@ -520,6 +539,25 @@ function (THREE, utils) {
                     throw "pointArm is missing any indication of speed or duration";
                 }
                 if (done) {
+                    actionsCompleted.push(action.id);
+                }
+                break;
+            case 'reachForAndGrab':
+                targetLoc = findGraspingLocation(action.arm, action.target);
+                done = robot.stepHandTowardsTarget(action.arm,
+                                                   0.1,
+                                                   action.speed * dt,
+                                                   targetLoc.wrist,
+                                                   targetLoc.palm,
+                                                   targetLoc.center);
+                if (done === 'success') {
+                    app.robot.grab(app.scene.getObjectByName(action.target, true),
+                                   action.arm);
+                    console.log(app.robot.rightHandObject);
+                }
+                if (done === 'success' ||
+                    done === 'failure') {
+                    console.log(done);
                     actionsCompleted.push(action.id);
                 }
                 break;

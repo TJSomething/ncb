@@ -60,8 +60,8 @@ importScripts('../../lib/underscore.js');
      * @augments {scripting~Action}
      * @param {string} action the action to be performed
      * @param {object} params parameters for the action
-     */
-    var ExtendedAction = function (action, params) {
+         */
+        var ExtendedAction = function (action, params) {
         Action.call(this, action, params);
 
         runningActions[this.id] = this;
@@ -196,13 +196,13 @@ importScripts('../../lib/underscore.js');
      *                                value
      */
     function getPixel(x, y) {
-        var pixelX = ((x + 1.0) * 0.5 * (this.sensors.camera.width - 1))|0,
-            pixelY = ((1.0 - y) * 0.5 * (this.sensors.camera.height - 1))|0,
-            index = (pixelY * this.sensors.camera.width + pixelX) * 4,
-            r = this.sensors.camera.data[index],
-            g = this.sensors.camera.data[index + 1],
-            b = this.sensors.camera.data[index + 2],
-            a = this.sensors.camera.data[index + 3],
+        var pixelX = ((x + 1.0) * 0.5 * (self.sensors.camera.width - 1))|0,
+            pixelY = ((1.0 - y) * 0.5 * (self.sensors.camera.height - 1))|0,
+            index = (pixelY * self.sensors.camera.width + pixelX) * 4,
+            r = self.sensors.camera.data[index],
+            g = self.sensors.camera.data[index + 1],
+            b = self.sensors.camera.data[index + 2],
+            a = self.sensors.camera.data[index + 3],
             hsv = rgb2hsv(r, g, b);
 
         return {
@@ -433,6 +433,32 @@ importScripts('../../lib/underscore.js');
     }
 
     /**
+     * Reaches for and grabs an object with the left hand.
+     *
+     * @param objName
+     * @returns {ExtendedAction}
+     */
+    function reachForAndGrabWithLeftHand(objName) {
+        return new ExtendedAction('reachForAndGrab', {
+            arm: 'left',
+            target: objName
+        });
+    }
+
+    /**
+     * Reaches for and grabs an object with the right hand.
+     *
+     * @param objName
+     * @returns {ExtendedAction}
+     */
+    function reachForAndGrabWithRightHand(objName) {
+        return new ExtendedAction('reachForAndGrab', {
+            arm: 'right',
+            target: objName
+        });
+    }
+
+    /**
      *  Sets the state.
      * @memberof scripting
      */
@@ -503,7 +529,7 @@ importScripts('../../lib/underscore.js');
         }
     }
 
-    Object.defineProperties(this,
+    Object.defineProperties(self,
         {
             'getPixel': {value: getPixel},
             'turnTowards': {value: turnTowards},
@@ -521,6 +547,8 @@ importScripts('../../lib/underscore.js');
             'changeExpression': {value: changeExpression},
             'grabWithLeftArm': {value: grabWithLeftArm},
             'grabWithRightArm': {value: grabWithRightArm},
+            'reachForAndGrabWithLeftHand': {value: reachForAndGrabWithLeftHand},
+            'reachForAndGrabWithRightHand': {value: reachForAndGrabWithRightHand},
             'next': {value: next},
             'state': {
                 get: function () { return state; }
@@ -557,7 +585,7 @@ importScripts('../../lib/underscore.js');
         }
     );
 
-    this.addEventListener('message', function (oEvent) {
+    self.addEventListener('message', function (oEvent) {
         var reply = {};
 
         // If this is our first message
@@ -573,7 +601,7 @@ importScripts('../../lib/underscore.js');
             }
         } else if (oEvent.data.sensors) {
             // Make sensor data available
-            this.sensors = oEvent.data.sensors;
+            self.sensors = oEvent.data.sensors;
             // Check if any of the current actions have completed
             if (oEvent.data.actionsCompleted) {
                 oEvent.data.actionsCompleted.forEach(function (actionId) {

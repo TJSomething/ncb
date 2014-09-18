@@ -830,7 +830,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
         physics.updateObjects(dt);
         physics.detectCollisions();
         physics.resolveCollisions(dt);
-        controller.step();
+        controller.step(dt);
     });
 
     app.on('render', (function () {
