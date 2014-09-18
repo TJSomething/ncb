@@ -176,11 +176,12 @@ function (THREE, utils) {
             sensors.compass = utils.mod(90 - (robot.rotation.y * 180 / Math.PI), 360);
         }
 
+        /*
         if (capabilities.pickUp) {
             // TODO: Make held objects public
             //sensors.leftHandObject = robot.leftHandObject.name;
             //sensors.rightHandObject = robot.rightHandObject.name;
-        }
+        }*/
 
         if (capabilities.arms) {
             sensors.arms = {
@@ -413,7 +414,7 @@ function (THREE, utils) {
      * executing a portion of that action.
      *
      * @memberof module:vbot/controller~
-     * @param  {Action} action the action in progress
+     * @param  {scripting~Action} action the action in progress
      * @param  {Number} dt     the length of the time step
      */
     function stepAction(action, dt) {
@@ -645,11 +646,9 @@ function (THREE, utils) {
         return collisions;
     }
 
-    var controller = {
+    return {
         init: init,
         test: test,
         step: step
     };
-
-    return controller;
 });

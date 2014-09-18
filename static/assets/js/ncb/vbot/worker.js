@@ -28,7 +28,7 @@ importScripts('../../lib/underscore.js');
      * Makes an action.
      *
      * @class
-     * @memberof scripting~
+     * @alias scripting~Action
      * @param {string} action the action to be performed
      * @param {object} params parameters for the action
      */
@@ -55,13 +55,12 @@ importScripts('../../lib/underscore.js');
     /**
      * Creates an extended action and puts it in the running actions list.
      *
-     * @constructs ExtendedAction
-     * @memberof scripting~
+     * @constructs scripting~ExtendedAction
      * @augments {scripting~Action}
      * @param {string} action the action to be performed
      * @param {object} params parameters for the action
-         */
-        var ExtendedAction = function (action, params) {
+     */
+    var ExtendedAction = function (action, params) {
         Action.call(this, action, params);
 
         runningActions[this.id] = this;
@@ -70,7 +69,7 @@ importScripts('../../lib/underscore.js');
     };
 
     ExtendedAction.prototype =
-    /** @lends scripting~ExtendedAction.prototype */
+    /** @lends ExtendedAction.prototype */
     {
         /**
          * Sets a time period for the action to take place over.
@@ -188,7 +187,7 @@ importScripts('../../lib/underscore.js');
      * Gets the pixel value at x and y, where x and y are in [-1,1] on a
      * Euclidean plane.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {Number} x
      * @param {Number} y
      * @return {scripting~Color} the color at that point, with keys red,
@@ -220,21 +219,19 @@ importScripts('../../lib/underscore.js');
      * Turns towards the named object.
      *
      * @param {string} objName the object's name
-     * @memberof scripting
+     * @memberOf scripting
      * @return {scripting~ExtendedAction} the turning action
      */
     function turnTowards(objName) {
-        var action = new ExtendedAction('turnTowards', {
+        return new ExtendedAction('turnTowards', {
             objName: objName
         });
-
-        return action;
     }
 
     /**
      * Set the walking speed. Can be negative to walk backwards.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {Number} speed the speed in m/s
      * @return {scripting~Action} the action of setting the walking speed
      */
@@ -248,7 +245,7 @@ importScripts('../../lib/underscore.js');
      * Set the turning speed in radians per second. Can be negative to turn
      * right.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {Number} speed the turning speed
      * @return {scripting~Action}      the action of beginning to turn left
      */
@@ -262,7 +259,7 @@ importScripts('../../lib/underscore.js');
      * Set the turning speed in radians per second. Can be negative to turn
      * left.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {Number} speed the turning speed
      * @return {scripting~Action}      the action of beginning to turn right
      */
@@ -275,7 +272,7 @@ importScripts('../../lib/underscore.js');
     /**
      * Turns left by the given number of degrees.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {Number} degrees  the number of degrees to turn
      * @return {scripting~ExtendedAction} the action of turning left
      */
@@ -300,7 +297,7 @@ importScripts('../../lib/underscore.js');
     /**
      *  Go forward by the given distance.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {Number} distance the distance to go forward by
      * @return {scripting~ExtendedAction} this action
      */
@@ -313,7 +310,7 @@ importScripts('../../lib/underscore.js');
     /**
      *  Go backwards by the given distance.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {Number} distance the distance to go backward by
      * @return {scripting~ExtendedAction}
      */
@@ -326,7 +323,7 @@ importScripts('../../lib/underscore.js');
     /**
      *  Tries to point the right arm at the given object.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {string} objName the name of the object to point at
      * @return {scripting~ExtendedAction} this action
      */
@@ -340,7 +337,7 @@ importScripts('../../lib/underscore.js');
     /**
      *  Tries to point the left arm at the given object.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {string} objName  the name of the object to point at
      * @return {scripting~ExtendedAction} this action
      */
@@ -355,7 +352,7 @@ importScripts('../../lib/underscore.js');
      *  Tries to point the left arm in the direction of the given vector of the
      *  given coordinates. This vector starts at the shoulder joint.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {Number} x
      * @param {Number} y
      * @param {Number} z
@@ -376,7 +373,7 @@ importScripts('../../lib/underscore.js');
      * Tries to point the left arm in the direction of the given vector of the
      * given coordinates. This vector starts at the shoulder joint.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {Number} x
      * @param {Number} y
      * @param {Number} z
@@ -396,7 +393,7 @@ importScripts('../../lib/underscore.js');
     /**
      * Changes the expression.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param {string} expression the expression to change to
      * @return {scripting~ExtendedAction} this action
      */
@@ -410,7 +407,7 @@ importScripts('../../lib/underscore.js');
      *  Grabs the object that is intersecting with the hand
      *  with the right arm
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @return {scripting~Action} this action
      */
     function grabWithRightArm() {
@@ -423,7 +420,7 @@ importScripts('../../lib/underscore.js');
      *  Grabs the object that is intersecting with the hand
      *  with the left arm
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @return {scripting~Action} this action
      */
     function grabWithLeftArm() {
@@ -460,7 +457,7 @@ importScripts('../../lib/underscore.js');
 
     /**
      *  Sets the state.
-     * @memberof scripting
+     * @memberOf scripting
      */
     function next(newState) {
         if (_.isString(newState) &&
@@ -476,7 +473,7 @@ importScripts('../../lib/underscore.js');
     /**
      * Logs an error.
      *
-     * @memberof scripting
+     * @memberOf scripting
      * @param  {string} error an error message
      */
     function log(error) {
@@ -593,11 +590,11 @@ importScripts('../../lib/underscore.js');
             // Load up the script as a state machine
             try {
                 loadScript(oEvent.data.script);
-                postMessage({loaded: true});
+                self.postMessage({loaded: true});
             } catch (e) {
                 // If there's an error in their script, send them a message
                 reply.error = e.message;
-                postMessage(reply);
+                self.postMessage(reply);
             }
         } else if (oEvent.data.sensors) {
             // Make sensor data available
@@ -625,7 +622,7 @@ importScripts('../../lib/underscore.js');
                 // actuation call
                 reply.step = oEvent.data.step;
                 // Send the message back
-                postMessage(reply);
+                self.postMessage(reply);
                 clearNewActions();
             } catch (e) {
                 // If there was an error running their stuff, tell them
@@ -633,7 +630,7 @@ importScripts('../../lib/underscore.js');
                     message: e.message,
                     stack: e.stack
                 };
-                postMessage(reply);
+                self.postMessage(reply);
             }
         }
     });

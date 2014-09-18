@@ -13,8 +13,8 @@ function (THREE, physics, motion) {
      * @property {THREE.Bone} larm the left humerus
      * @property {THREE.Bone} rarm the right humerus
      * @property {Object} heldObject the two held objects
-     * @property {?THREE.Object3D} heldObject.left
-     * @property {?THREE.Object3D} heldObject.right
+     * @property {?THREE.Object3D} heldObjects.left
+     * @property {?THREE.Object3D} heldObjects.right
      * @property {Object} defaultArmUpVectors the up vectors used for rotating
      *                                        arms
      * @property {THREE.Vector3} defaultArmUpVectors.left
@@ -134,7 +134,7 @@ function (THREE, physics, motion) {
          * Rotates an arm toward pointing at a location
          *
          * @instance
-         * @param {arm} string                 which arm to move
+         * @param {string} arm                 which arm to move
          * @param {THREE.Vector3} targetVector where the arm should point
          * @param {Number} amount              the amount to move the arm, in
          *                                     either radians or percent of
@@ -241,11 +241,7 @@ function (THREE, physics, motion) {
             armObj.quaternion.slerp(q2, amount);
 
             // If it's done moving, then let's say that
-            if (amount === 1) {
-                return true;
-            } else {
-                return false;
-            }
+            return amount === 1;
         },
         /**
          * A function that picks up the object that's intersecting with the
@@ -339,7 +335,6 @@ function (THREE, physics, motion) {
                 wrist = elbow.children[0],
                 elbowMat = elbow.matrix,
                 wristMat = wrist.matrix,
-                handMat = wrist.matrixWorld,
                 upperArmLength = elbow.matrix.elements[12],
                 lowerArmLength = wrist.matrix.elements[12],
                 torsoMat = new THREE.Matrix4().getInverse(shoulder.parent.matrixWorld),
@@ -347,9 +342,9 @@ function (THREE, physics, motion) {
                 localTargetPalmPos = targetPalmPos.clone().applyMatrix4(torsoMat),
                 localTargetCenterPos = targetCenterPos.clone().applyMatrix4(torsoMat),
                 localPalmPos = new THREE.Vector3(0, -3, 0),
-                i, j, lastVal,
+                i,
                 newConfig,
-                lastDist, currentDist;
+                currentDist;
                 
             var lowerLimit = [-0.5, -0.4, -0.4, -0.75, 0, -0.4, -0.25];
             var upperLimit = [0.5, 0.4, 0.4, 0, 0.5, 0.4, 0.25];
@@ -452,7 +447,7 @@ function (THREE, physics, motion) {
             var configDist = 0;
             var configDiff = new Array(7);
             for (i = 0; i < 7; i += 1) {
-                configDiff[i] = plan.bestConfig[i] - plan.config[i]
+                configDiff[i] = plan.bestConfig[i] - plan.config[i];
                 configDist += Math.pow(configDiff[i], 2);
             }
             configDist = Math.sqrt(configDist);
@@ -494,7 +489,7 @@ function (THREE, physics, motion) {
                 return 'moving';
             }
         }
-    }
+    };
 
     /**
      * Adds the hasArms mixin to the given robot.
@@ -596,7 +591,6 @@ function (THREE, physics, motion) {
                     function animateWalking(ds, dtheta) {
                         // Don't let undefined through
                         ds = ds || 0;
-                        dtheta = dtheta || 0;
 
                         // Change our walk state
                         walkState += ds;
@@ -609,7 +603,7 @@ function (THREE, physics, motion) {
                             maxLegAngle * Math.cos(walkState / maxLegAngle);
                         llleg.rotation.x = maxLegAngle +
                             maxLegAngle * Math.cos(walkState / maxLegAngle);
-                    };
+                    }
                     return animateWalking;
                 }(lleg, rleg, Math.PI/9);
 
@@ -633,7 +627,7 @@ function (THREE, physics, motion) {
                 obj.defaultArmUpVectors = {
                     left: new THREE.Vector3(1, -1, 0),
                     right: new THREE.Vector3(1, -1, 0)
-                }
+                };
                 obj.armMatrixOrder = [0, 1, 2];
                 obj.calculateHandLocation = calculateHandLocation;
                 // Add all the arm movement methods
@@ -678,7 +672,6 @@ function (THREE, physics, motion) {
                     rarm = carl.getObjectByName('Carl:RightArm', true),
                     larm = carl.getObjectByName('Carl:LeftArm', true),
                     lhand = carl.getObjectByName('Carl:LeftHand', true),
-                    forearmLength = lhand.position.length(),
                     heldObjects = {right: null, left: null};
 
                 // Why is it in centimeters?
@@ -804,7 +797,7 @@ function (THREE, physics, motion) {
                 obj.defaultArmUpVectors = {
                     left: new THREE.Vector3(1, 0, 0),
                     right: new THREE.Vector3(-1, 0, 0)
-                }
+                };
                 obj.armMatrixOrder = [0, 2, 1];
                 obj.calculateHandLocation = calculateHandLocation;
                 // Add all the arm movement methods
@@ -948,7 +941,7 @@ function (THREE, physics, motion) {
              */
              function instantBackward(displacement) {
                 this.instantForward(-displacement);
-            };
+            }
             robot.instantBackward = instantBackward;
 
             /**
@@ -960,7 +953,7 @@ function (THREE, physics, motion) {
             function instantRight(displacement) {
                 this.animateWalking(0, displacement);
                 this.rotateY(displacement);
-            };
+            }
             robot.instantRight = instantRight;
 
             /**
@@ -971,7 +964,7 @@ function (THREE, physics, motion) {
              */
             function instantLeft(displacement) {
                 this.instantRight(-displacement);
-            };
+            }
             robot.instantLeft = instantLeft;
 
             /**
@@ -1000,7 +993,7 @@ function (THREE, physics, motion) {
                 }
                 // Make sure everyone knows that we've moved
                 this.updateMatrix();
-            };
+            }
             robot.simultaneousTurnMove = simultaneousTurnMove;
 
 
@@ -1016,7 +1009,7 @@ function (THREE, physics, motion) {
 
                 // Move
                 this.simultaneousTurnMove(ds, dtheta);
-            };
+            }
             robot.move = move;
 
             robot.app.on('logic-tick', robot.move, robot);

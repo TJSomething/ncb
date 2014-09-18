@@ -394,9 +394,6 @@ function () {
         var theta_5 = config[4];
         var theta_6 = config[5];
         var theta_7 = config[6];
-        var pose_rx = theta_1 + theta_5;
-        var pose_ry = theta_3 + theta_4 + theta_7;
-        var pose_rz = theta_2 + theta_6;
         var target_x = targetWristPos.x;
         var target_y = targetWristPos.y;
         var target_z = targetWristPos.z;

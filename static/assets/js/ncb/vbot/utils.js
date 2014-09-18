@@ -1,8 +1,8 @@
 /* jslint browser: true */
 /* global THREE: false, mod: true */
 
-define(['three'],
-function (THREE) {
+define(
+function () {
   'use strict';
 
   /** @exports vbot/utils */

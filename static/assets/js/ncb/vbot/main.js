@@ -60,7 +60,7 @@ requirejs(['jquery', 'vbot/app', 'vbot/controller'], function ($, VBOT, controll
             }
 		});
 
-		$('#mainNav a').click(function() {
+		$('#mainNav').find('a').click(function() {
 			if ($('#vbot-body').is(':visible')) {
 				VBOT.pause(false);
 			} else {
@@ -87,6 +87,8 @@ requirejs(['jquery', 'vbot/app', 'vbot/controller'], function ($, VBOT, controll
                     break;
                 case 68: // D
                     VBOT.robot.angularVelocity = -1;
+                    break;
+                default:
                     break;
             }
         }, false );

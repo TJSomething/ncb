@@ -7,7 +7,7 @@ function (THREE, numeric, _) {
 
     /** @exports vbot/physics */
 
-    var physics = (function () {
+    return (function () {
         var physicsObjects = [],
             // This is used to quickly address objects
             objectIndices = {},
@@ -188,12 +188,10 @@ function (THREE, numeric, _) {
             // center
             var p = obb.c;
 
-            var mat = new THREE.Matrix4(sc[0] * E[0][0], sc[1] * E[0][1], sc[2] * E[0][2], p.x,
+            return    new THREE.Matrix4(sc[0] * E[0][0], sc[1] * E[0][1], sc[2] * E[0][2], p.x,
                                         sc[0] * E[1][0], sc[1] * E[1][1], sc[2] * E[1][2], p.y,
                                         sc[0] * E[2][0], sc[1] * E[2][1], sc[2] * E[2][2], p.z,
                                         0,               0,               0,               1);
-
-            return mat;
         }
 
         /**
@@ -224,7 +222,7 @@ function (THREE, numeric, _) {
                 updateOBB();
                 originalUpdate(force);
                 boundingBox.matrixWorldNeedsUpdate = true;
-            }
+            };
 
             // We're not going to use position, quaternion, and scale
             boundingBox.matrixAutoUpdate = false;
@@ -253,12 +251,10 @@ function (THREE, numeric, _) {
                                  Vec(+1, -1, -1),
                                  Vec(+1, -1, +1),
                                  Vec(+1, +1, -1),
-                                 Vec(+1, +1, +1)],
-                transformedVerts = startVertices.map(function(vert) {
+                                 Vec(+1, +1, +1)];
+            return startVertices.map(function(vert) {
                     return vert.applyMatrix4(mat);
-                });
-
-            return transformedVerts;
+            });
         }
 
         /**
@@ -270,10 +266,8 @@ function (THREE, numeric, _) {
          *                                      the OBBs
          */
         function calcOBBsVertices(obbs) {
-            var vertsPerBox = obbs.map(calcOBBVertices),
-                combinedVerts = [].concat.apply([], vertsPerBox);
-
-            return combinedVerts;
+            var vertsPerBox = obbs.map(calcOBBVertices);
+            return [].concat.apply([], vertsPerBox);
         }
 
         /**
@@ -284,10 +278,8 @@ function (THREE, numeric, _) {
          *                                      OBBs
          */
         function calcBoundingSphereFromOBBs(obbs) {
-            var verts = calcOBBsVertices(obbs),
-                sphere = new THREE.Sphere().setFromPoints(verts);
-
-            return sphere;
+            var verts = calcOBBsVertices(obbs);
+            return new THREE.Sphere().setFromPoints(verts);
         }
 
         /**
@@ -345,17 +337,13 @@ function (THREE, numeric, _) {
                     [function () {
                         var boundingSphere = b.getBoundingSphere(),
                             c = boundingSphere.center,
-                            tmpC = new Vec(),
                             // Half extents
                             e = b.max.clone().
                                 sub(b.min).
                                 divideScalar(2),
                             u = [new Vec(1, 0, 0),
                                  new Vec(0, 1, 0),
-                                 new Vec(0, 0, 1)],
-                            mat = obj.geometry.matrixWorld,
-                            len = 0;
-
+                                 new Vec(0, 0, 1)];
                         return new OrientedBoundingBox(c, u, e.toArray(), obj.geometry);
                     }()];
             }
@@ -367,7 +355,7 @@ function (THREE, numeric, _) {
 
             obj.physics.updateBoundingSphere = function () {
                 obj.physics.boundingSphere = calcBoundingSphereFromOBBs(obj.physics.obbs);
-            }
+            };
 
             obj.physics.verticalVelocity = obj.physics.verticalVelocity || 0;
 
@@ -387,10 +375,6 @@ function (THREE, numeric, _) {
          * @param  {module:vbot/physics~CombinedPhysicsObject} obj
          */
         function initStaticObject(obj) {
-            var mat = obj.geometry.matrixWorld,
-                Vec = THREE.Vector3,
-                aabbWorld = (new THREE.Box3()).setFromObject(obj.geometry);
-
             obj.physics.faces = getGlobalFaces(obj);
 
             obj.physics.obbs = buildObjectOBBs(obj, staticCollisionResolution);
@@ -934,10 +918,8 @@ function (THREE, numeric, _) {
                     max = p0;
                 }
                 rad = fa * obb.e.y + fb * obb.e.z;
-                if (min > rad || max < -rad) {
-                    return false;
-                }
-                return true;
+                return !(min > rad || max < -rad);
+
             }
 
             function axisTestX2(a, b, fa, fb) {
@@ -951,10 +933,8 @@ function (THREE, numeric, _) {
                     max = p0;
                 }
                 rad = fa * obb.e.y + fb * obb.e.z;
-                if (min > rad || max < -rad) {
-                    return false;
-                }
-                return true;
+                return !(min > rad || max < -rad);
+
             }
 
             function axisTestY02(a, b, fa, fb) {
@@ -968,10 +948,8 @@ function (THREE, numeric, _) {
                     max = p0;
                 }
                 rad = fa * obb.e.x + fb * obb.e.z;
-                if (min > rad || max < -rad) {
-                    return false;
-                }
-                return true;
+                return !(min > rad || max < -rad);
+
             }
 
             function axisTestY1(a, b, fa, fb) {
@@ -985,10 +963,8 @@ function (THREE, numeric, _) {
                     max = p0;
                 }
                 rad = fa * obb.e.x + fb * obb.e.z;
-                if (min > rad || max < -rad) {
-                    return false;
-                }
-                return true;
+                return !(min > rad || max < -rad);
+
             }
 
             function axisTestZ12(a, b, fa, fb) {
@@ -1002,10 +978,8 @@ function (THREE, numeric, _) {
                     max = p2;
                 }
                 rad = fa * obb.e.x + fb * obb.e.y;
-                if (min > rad || max < -rad) {
-                    return false;
-                }
-                return true;
+                return !(min > rad || max < -rad);
+
             }
 
             function axisTestZ0(a, b, fa, fb) {
@@ -1019,10 +993,8 @@ function (THREE, numeric, _) {
                     max = p0;
                 }
                 rad = fa * obb.e.x + fb * obb.e.y;
-                if (min > rad || max < -rad) {
-                    return false;
-                }
-                return true;
+                return !(min > rad || max < -rad);
+
             }
 
             /**
@@ -1445,8 +1417,7 @@ function (THREE, numeric, _) {
             });
 
             // We'll convert those to OBBs
-            var result = boxes.map(convertBox3ToOBB);
-            return result;
+            return boxes.map(convertBox3ToOBB);
         }
 
         /**
@@ -1477,8 +1448,7 @@ function (THREE, numeric, _) {
                var idxs = s.skinIndices[i].toArray(),
                    weights = s.skinWeights[i].toArray(),
                    maxWeight = -Infinity,
-                   maxIndex = undefined,
-                   bone;
+                   maxIndex = undefined;
 
                for (j = 0; j < 4; j += 1) {
                    if (maxWeight !== undefined &&
@@ -1690,7 +1660,7 @@ function (THREE, numeric, _) {
          * @memberof module:vbot/physics
          */
         function detectCollisions() {
-            var i, j, collision, collisions;
+            var i, collision, collisions;
 
             // Clear previous collisions
             for (i = 0; i < physicsObjects.length; i += 1) {
@@ -1748,7 +1718,6 @@ function (THREE, numeric, _) {
          *
          * @memberof module:vbot/physics~
          * @param  {THREE.Object3D} obj
-         * @param  {string} type
          * @return {(module:vbot/physics~CombinedPhysicsObject|undefined)}
          */
         function getPhysicsObject(obj) {
@@ -1774,7 +1743,7 @@ function (THREE, numeric, _) {
                        obj2.physics.type === 'dynamic') {
                 return detectSingleCollision(obj1, obj2);
             } else {
-                throw type + ' is not an object type';
+                throw obj2.physics.type + ' is not an object type';
             }
         }
 
@@ -2016,6 +1985,4 @@ function (THREE, numeric, _) {
                 setCollisionVolumeResolution: setCollisionVolumeResolution
             };
     }());
-
-    return physics;
 });

@@ -15,7 +15,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
      * @property {Object} size the size of the viewport
      * @property {Boolean} running whether the virtual robot is paused
      * @property {THREE.Scene} scene the scene
-     * @property {HTMLDivElement} container the div that the rendering occurs in
+     * @property {HTMLElement} container the div that the rendering occurs in
      * @property {THREE.WebGLRenderer} renderer the renderer
      * @property {Stats} renderStats displays statistics on render speed
      * @property {Stats} logicStats displays statistics on logic speed
@@ -90,8 +90,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
                 }, 1000);
             }
         }
-    };
-
+    }
     /**
      * Resizes the viewport to fill the screen under the toolbar.
      *
@@ -116,7 +115,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
      * @memberof module:vbot/app~
      */
     function initViewport() {
-        var width, height, left, top,
+        var width, height, left,
             totalTasks = 6,
             tasksLeft = totalTasks,
             progressBox;
@@ -134,9 +133,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
         taskDone();
 
         width = app.container.offsetWidth;
-        height = app.container.offsetHeight;
         left = app.container.offsetLeft;
-        top = app.container.offsetTop;
 
         // Stick the progress box in the center of the viewport
         progressBox = document.createElement('div');
@@ -184,8 +181,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
         app.container.appendChild(app.logicStats.domElement);
 
         taskDone();
-    };
-
+    }
     /**
      * Loads the scene file and the robot.
      *
@@ -380,7 +376,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
          * For auxiliary scene data creation, adds a task to a task queue and
          * updates the progress bar.
          *
-         * @param {function} task a function that performs a task
+         * @param {function=} task a function that performs a task
          */
         function addTask(task) {
             tasksLeft += 1;
@@ -642,16 +638,14 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
         addTask(app.scene.traverse.bind(app.scene, initObject));
 
         setTimeout(runTasks, 0);
-    };
-
+    }
     /**
      * Starts the event loop.
      *
      * @memberof module:vbot/app~
      */
     function startLoop() {
-        var that = app,
-            width = app.container.offsetWidth,
+        var width = app.container.offsetWidth,
             height = app.container.offsetHeight,
             dpr = window.devicePixelRatio || 1,
             renderer = app.renderer,
@@ -785,8 +779,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
                     }
                 }, tickLength);
         }());
-    };
-
+    }
     /**
      * Pauses the simulation.
      *
@@ -807,7 +800,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
      */
     app.testController = function () {
         controller.test(app);
-    }
+    };
 
     /**
      * Toggles visibility of collision volumes.
@@ -816,7 +809,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
      */
     app.toggleCollisionVolumes = function () {
         physics.toggleCollisionVolumes(app.scene);
-    }
+    };
 
     app.on('scene-loaded', readyScene);
 
@@ -836,8 +829,6 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
     app.on('render', (function () {
         var canvas = document.createElement('canvas'),
             ctx = canvas.getContext('2d'),
-            dpr = window.devicePixelRatio || 1,
-            container = document.getElementById('vbot-body'),
             imageData;
 
         // This might be needed for a demo, but probably not
