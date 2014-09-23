@@ -133,6 +133,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
         taskDone();
 
         width = app.container.offsetWidth;
+        height = app.container.offsetHeight;
         left = app.container.offsetLeft;
 
         // Stick the progress box in the center of the viewport
@@ -428,8 +429,8 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
 
                 // TODO: Only add lights if there are none
                 // Add some lights
-                app.scene.add(new THREE.AmbientLight( 0x222222 ));
-                light = new THREE.DirectionalLight(0xffffff, 0.7);
+                app.scene.add(new THREE.AmbientLight( 0x666666 ));
+                light = new THREE.DirectionalLight(0xffffff, 0.5);
                 light.position.set(1, 5, 1);
                 app.scene.add(light);
 

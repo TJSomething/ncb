@@ -56400,14 +56400,14 @@
             "DbgName": "CarlCol",
             "blending": "NormalBlending",
             "colorAmbient": [
-                2.0,
-                2.0,
-                2.0
+                1.0,
+                1.0,
+                1.0
             ],
             "colorDiffuse": [
-                0.5,
-                0.5,
-                0.5
+                0.9,
+                0.9,
+                0.9
             ],
             "colorSpecular": [
                 0.20000000298023224,

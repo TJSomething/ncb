@@ -334,8 +334,7 @@ function (THREE, physics, motion) {
                 elbow = shoulder.children[0],
                 wrist = elbow.children[0],
                 elbowMat = elbow.matrix,
-                wristMat = wrist.matrix,
-                upperArmLength = elbow.matrix.elements[12],
+                wristMat = wrist.matrix, upperArmLength = elbow.matrix.elements[12],
                 lowerArmLength = wrist.matrix.elements[12],
                 torsoMat = new THREE.Matrix4().getInverse(shoulder.parent.matrixWorld),
                 localTargetWristPos = targetWristPos.clone().applyMatrix4(torsoMat),
@@ -361,7 +360,7 @@ function (THREE, physics, motion) {
                 
                 return config;
             }
-            
+
             function randomConfig() {
                 var config = new Array(7);
                 for (i = 0; i < 7; i += 1) {
@@ -373,7 +372,31 @@ function (THREE, physics, motion) {
                 
                 return config;
             }
-            
+
+            var primes = [2,3,5,7,11,13,17];
+            // TODO: Cite doi:10.1145/355588.365104.
+            function haltonConfig(index) {
+                function halton(i, base) {
+                    var result = 0,
+                        f = 1 / base;
+                    while (i > 0) {
+                        result += f * (i % base);
+                        i = Math.floor(i / base);
+                        f = f/base;
+                    }
+                    return result;
+                }
+                var config = new Array(7);
+                for (var dimension = 0; dimension < 7; dimension += 1) {
+                    config[dimension] = Math.PI * (
+                            halton(index, primes[dimension]) *
+                            (upperLimit[dimension] - lowerLimit[dimension]) +
+                            lowerLimit[dimension]);
+                }
+
+                return config;
+            }
+
             function distanceToGoal(config) {
                 return motion.handDist(shoulderMat,
                                        upperArmLength,
@@ -401,7 +424,8 @@ function (THREE, physics, motion) {
             }
             if (this.planningData[sideName] === undefined) {
                 this.planningData[sideName] = {
-                    config: motion.calcConfig(shoulderMat, elbowMat, wristMat)
+                    config: motion.calcConfig(shoulderMat, elbowMat, wristMat),
+                    configCount: 0
                 };
             }
             var plan = this.planningData[sideName];
@@ -421,14 +445,18 @@ function (THREE, physics, motion) {
                 plan.targetCenterPos = localTargetCenterPos;
                 plan.bestConfig = plan.config.slice(0);
                 plan.bestDist = distanceToGoal(plan.config);
+                plan.randomCount = 0;
             }
             
             // Spend 10 ms searching for a better target configuration
             var startTime = Date.now();
+            plan.configCount += 10;
             while (Date.now() - startTime < 10) {
                 // Inspired by Weghe, et al.'s JT-RRT algorithm
-                if (Math.random() < 0.5) {
-                    newConfig = randomConfig();
+                // TODO: Cite that.
+                if (Math.random() < 0.1) {
+                    newConfig = haltonConfig(plan.randomCount);
+                    plan.randomCount += 1;
                 } else {
                     newConfig = stepTowardsGoal(plan.bestConfig);
                 }
@@ -479,6 +507,7 @@ function (THREE, physics, motion) {
             // we're done
             if (configDist === 0) {
                 if (plan.bestDist < 20) {
+                    console.log(plan.configCount);
                     return 'success';
                 } else {
                     // If we're not close enough, the we've failed
