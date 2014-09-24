@@ -450,8 +450,8 @@ function (THREE, physics, motion) {
             
             // Spend 10 ms searching for a better target configuration
             var startTime = Date.now();
-            plan.configCount += 10;
             while (Date.now() - startTime < 10) {
+                plan.configCount += 1;
                 // Inspired by Weghe, et al.'s JT-RRT algorithm
                 // TODO: Cite that.
                 if (Math.random() < 0.1) {
@@ -506,8 +506,8 @@ function (THREE, physics, motion) {
             // the hand is close enough to the target, then
             // we're done
             if (configDist === 0) {
+                console.log('Attempted configs: ' + plan.configCount);
                 if (plan.bestDist < 20) {
-                    console.log(plan.configCount);
                     return 'success';
                 } else {
                     // If we're not close enough, the we've failed
