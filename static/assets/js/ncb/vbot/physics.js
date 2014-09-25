@@ -40,6 +40,28 @@ function (THREE, numeric, _, collision) {
          *                                     graphics engine
          */
 
+            
+        /**
+         * Finds the robot's arm bones
+         *
+         * @param {THREE.Object3D} robot the robot parent
+         * @returns {Array.<THREE.Bone>} the arm bones
+         */
+        function findArmBones(robot) {
+            // Find the arm bones
+            var armBones = [];
+            // If there are arms, then there are arm bones
+            if (robot.larm !== undefined) {
+                [robot.larm, robot.rarm].forEach(function (arm) {
+                    arm.traverse(function (bone) {
+                        armBones.push(bone);
+                    });
+                });
+            }
+            
+            return armBones;
+        }
+
         /**
          * Builds an OBB around a robot's core (everything other than the arms)
          *
@@ -54,15 +76,7 @@ function (THREE, numeric, _, collision) {
                 bones.push(bone);
             });
             // Find the arm bones
-            var armBones = [];
-            // If there are arms, then there are arm bones
-            if (robot.larm !== undefined) {
-                [robot.larm, robot.rarm].forEach(function (arm) {
-                    arm.traverse(function (bone) {
-                        armBones.push(bone);
-                    });
-                });
-            }
+            var armBones = findArmBones(robot);
             // Make a list of non-arm bones
             var coreBones = _.difference(bones, armBones);
             // Index the non-arm bones by name
@@ -114,6 +128,12 @@ function (THREE, numeric, _, collision) {
                 // Build a broad OBB around the torso and legs
                 obj.geometry.broadOBB = buildRobotBroadOBB(obj.geometry,
                     obj.physics.obbs);
+                // Make a set of the arms bones. We're going to
+                // handle arm collisions differently from body collisions
+                obj.geometry.armBones = findArmBones(obj.geometry).reduce(function (boneSet, bone) {
+                    boneSet[bone.name] = true;
+                    return boneSet;
+                }, {});
                 obj.geometry.parent.add(new collision.OBBHelper(obj.geometry.broadOBB));
                 robot = obj;
             } else {
@@ -698,6 +718,18 @@ function (THREE, numeric, _, collision) {
                             if (collision.penetration !== Infinity) {
                                 collision.otherObject = obj2.geometry;
                                 collision.type = obj2.physics.type;
+                                // The robot bones are not the immediate children
+                                // of the robot, so we add a body part if we have that
+                                if (obb1.name &&
+                                    obb1.name !== obj1.name) {
+                                    collision.bodyPart = obb1.name;
+                                } else if (obb2.name &&
+                                           obb2.name !== obj2.name) {
+                                    collision.bodyPart = obb2.name;
+                                }
+                                if (collision.bodyPart) {
+                                    console.log(collision.bodyPart);
+                                }
 
                                 if (collision.penetration > bestCollision.penetration) {
                                     bestCollision = collision;
@@ -889,7 +921,8 @@ function (THREE, numeric, _, collision) {
                      otherObject.physics.state !== 'held')) {
                     // If it's a horizontal collision, check if the object can be climbed
                     if (newCollision.contactNormal.y < newCollision.contactNormal.x +
-                                                       newCollision.contactNormal.z) {
+                                                       newCollision.contactNormal.z &&
+                        !obj.geometry.armBones.hasOwnProperty(newCollision.name)) {
                         obj.geometry.position.y += staticCollisionResolution;
                         updateObjectLocation(obj);
                         // Run collision detection again

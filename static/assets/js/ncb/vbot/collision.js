@@ -93,7 +93,7 @@ function (THREE, numeric, _) {
          * the properties based on the parent of this OBB. This speeds up
          * collision detection.
          *
-         * @instance
+         * @instancecollision.OBB
          * @memberof OBB
          * @return {OBB} a dumb copy of this
          *                                            OBB
@@ -118,6 +118,12 @@ function (THREE, numeric, _) {
                     configurable: false,
                     enumerable: false,
                     value: this.u
+                },
+                name: {
+                    writable: false,
+                    configurable: false,
+                    enumerable: false,
+                    value: this.name
                 },
                 clone: {
                     writable: false,
@@ -860,7 +866,6 @@ function (THREE, numeric, _) {
         });
         var totalWeight = vertices.length,
             centroid = numeric.div(vertices.reduce(function (x,y) {
-                    console.log(y[1]);
                     return numeric.add(x,y);
                 }), totalWeight),
             covariance = vertices.map(function (x) {
@@ -885,7 +890,7 @@ function (THREE, numeric, _) {
                 var min = Math.min.apply(Math, projectedPoints);
                 var middle = (max + min) / 2;
                 boxBases.push(new THREE.Vector3(E[0][i], E[1][i], E[2][i]));
-                center = numeric.add(center, numeric.dot(basis, middle));
+                center[i] = middle;
                 sc[i] = (max - min) / 2;
             }
 
