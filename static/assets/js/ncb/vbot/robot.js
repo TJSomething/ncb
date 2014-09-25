@@ -565,11 +565,6 @@ function (THREE, physics, motion) {
                 steve.scale.set(scale, scale, scale);
 
                 obj.add(steve);
-                physics.addObject(obj,
-                    {
-                        type: 'dynamic',
-                        state: 'controlled'
-                    });
 
                 for (i = 0; i < materials.length; i += 1) {
                     // For bones
@@ -662,6 +657,13 @@ function (THREE, physics, motion) {
                 // Add all the arm movement methods
                 addArms(obj);
 
+                // Add to the physics engine
+                physics.addObject(obj,
+                    {
+                        type: 'dynamic',
+                        state: 'controlled'
+                    });
+
                 Object.defineProperties(obj, {
                        leftHandObject: {
                                get: function () {
@@ -707,11 +709,6 @@ function (THREE, physics, motion) {
                 carl.scale.set(scale, scale, scale);
 
                 obj.add(carl);
-                physics.addObject(obj,
-                    {
-                        type: 'dynamic',
-                        state: 'controlled'
-                    });
 
                 for (i = 0; i < materials.length; i += 1) {
                     // For bones
@@ -831,6 +828,12 @@ function (THREE, physics, motion) {
                 obj.calculateHandLocation = calculateHandLocation;
                 // Add all the arm movement methods
                 addArms(obj);
+
+                physics.addObject(obj,
+                    {
+                        type: 'dynamic',
+                        state: 'controlled'
+                    });
 
                 Object.defineProperties(obj, {
                        leftHandObject: {

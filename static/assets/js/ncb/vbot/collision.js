@@ -16,10 +16,10 @@ function (THREE, numeric, _) {
      * @param {number[]} halfExtents      an array of the half-lengths of each dimension
      *                                    of the OBB
      * @param {THREE.Object3D} parent     the parent of this OBB
-     * @return {OrientedBoundingBox} an oriented bounding box
+     * @return {OBB} an oriented bounding box
      */
-    collision.OrientedBoundingBox = function (center, bases, halfExtents, parent) {
-        var obb = Object.create(collision.OrientedBoundingBox.prototype);
+    collision.OBB = function (center, bases, halfExtents, parent) {
+        var obb = Object.create(collision.OBB.prototype);
         var rotMatrix =
             new THREE.Matrix4(bases[0].x, bases[1].x, bases[2].x, 0,
                               bases[0].y, bases[1].y, bases[2].y, 0,
@@ -60,12 +60,12 @@ function (THREE, numeric, _) {
          * Updates this OBB's matrix based on its parent
          *
          * @instance
-         * @memberof OrientedBoundingBox
+         * @memberof OBB
          */
         function update() {
-            if (!matrix4Equals(parent.matrixWorld, parentMemo)) {
+            if (!matrix4Equals(parent.matrixWorld, parentMemo) ||
+                c === undefined) {
                 c = center.clone().applyMatrix4(parent.matrixWorld);
-
                 mat.multiplyMatrices(parent.matrixWorld, rotMatrix);
                 u[0].x = mat.elements[0];
                 u[0].y = mat.elements[1];
@@ -94,13 +94,13 @@ function (THREE, numeric, _) {
          * collision detection.
          *
          * @instance
-         * @memberof OrientedBoundingBox
-         * @return {OrientedBoundingBox} a dumb copy of this
+         * @memberof OBB
+         * @return {OBB} a dumb copy of this
          *                                            OBB
          */
         function clone() {
             update();
-            return Object.create(collision.OrientedBoundingBox.prototype, {
+            return Object.create(collision.OBB.prototype, {
                 c: {
                     writable: false,
                     configurable: false,
@@ -138,7 +138,7 @@ function (THREE, numeric, _) {
          * the center of the OBB
          *
          * @instance
-         * @memberof OrientedBoundingBox
+         * @memberof OBB
          * @var {THREE.Vector3} c
          */
         Object.defineProperty(obb, 'c',
@@ -152,7 +152,7 @@ function (THREE, numeric, _) {
          * the half-extents of the OBB
          *
          * @instance
-         * @memberof OrientedBoundingBox
+         * @memberof OBB
          * @var {THREE.Vector3} e
          */
         Object.defineProperty(obb, 'e',
@@ -165,7 +165,7 @@ function (THREE, numeric, _) {
          * the bases of the OBB
          *
          * @instance
-         * @memberof OrientedBoundingBox
+         * @memberof OBB
          * @var {Array.<THREE.Vector3>} u
          */
         Object.defineProperty(obb, 'u',
@@ -183,11 +183,23 @@ function (THREE, numeric, _) {
             {
                 value: clone
             });
+        /**
+         * the name of the OBB's parent
+         *
+         * @instance
+         * @memberof OBB
+         * @var {string} name
+         */
+        Object.defineProperty(obb, 'name',
+            {
+                value: parent.name
+            }
+        );
 
         return obb;
     };
 
-    collision.OrientedBoundingBox.prototype = {
+    collision.OBB.prototype = {
         /**
          * Calculates a matrix that transforms a unit cube centered at (0,0,0)
          * to the given OBB
@@ -234,7 +246,7 @@ function (THREE, numeric, _) {
         /**
          * Finds if two OBB's are colliding.
          *
-         * @param  {OrientedBoundingBox} b
+         * @param  {OBB} b
          * @return {module:vbot/collision~Collision?} if the boxes are collding, then the
          *                             collision is returned. If they're not,
          *                             then false is returned.
@@ -791,17 +803,17 @@ function (THREE, numeric, _) {
     };
 
     /**
-     * Converts a THREE.Box3 into an OrientedBoundingBox.
+     * Converts a THREE.Box3 into an OBB.
      *
      * Note a THREE.Box3 is an axis-aligned bounding box.
      *
      * @memberof module:vbot/physics~
      * @param  {THREE.Box3} box
-     * @return {OrientedBoundingBox}
+     * @return {OBB}
      */
-    collision.OrientedBoundingBox.fromBox3 =
+    collision.OBB.fromBox3 =
         function (box) {
-            return Object.create(collision.OrientedBoundingBox.prototype, {
+            return Object.create(collision.OBB.prototype, {
                 c: {
                     writable: false,
                     configurable: false,
@@ -831,13 +843,67 @@ function (THREE, numeric, _) {
             });
         };
 
+    /**
+     *  Fits an OBB to a bunch of bytes
+     *
+     * @param {Array.<THREE.Vector3>} vertices global vertices for the object
+     * @param {THREE.Object3D} parent the parent object for this OBB
+     * @returns {OBB?} the OBB if we have more than two vertices
+     */
+    collision.OBB.fromPoints = function (vertices, parent) {
+        function projectPoints(basis, points) {
+            return points.map(function (pt) { return numeric.dot(basis, pt); });
+        }
+        // Convert the vertices from THREE.Vector3s to arrays
+        vertices = vertices.map(function (vertex) {
+            return parent.worldToLocal(vertex.clone()).toArray();
+        });
+        var totalWeight = vertices.length,
+            centroid = numeric.div(vertices.reduce(function (x,y) {
+                    console.log(y[1]);
+                    return numeric.add(x,y);
+                }), totalWeight),
+            covariance = vertices.map(function (x) {
+                    var diff = [numeric.sub(x, centroid)];
+                    return numeric.dot(numeric.transpose(diff), diff);
+                }).reduce(function (cov, x) {
+                    return numeric.add(cov, x);
+                });
+
+        if (vertices.length > 2) {
+            var eigen = numeric.eig(covariance);
+
+            var E = eigen.E.x;
+            var sc = [0, 0, 0];
+            var center = [0, 0, 0];
+            var boxBases = [];
+
+            for (var i = 0; i < 3; i += 1) {
+                var basis = [E[0][i], E[1][i], E[2][i]];
+                var projectedPoints = projectPoints(basis, vertices);
+                var max = Math.max.apply(Math, projectedPoints);
+                var min = Math.min.apply(Math, projectedPoints);
+                var middle = (max + min) / 2;
+                boxBases.push(new THREE.Vector3(E[0][i], E[1][i], E[2][i]));
+                center = numeric.add(center, numeric.dot(basis, middle));
+                sc[i] = (max - min) / 2;
+            }
+
+            var p = parent.localToWorld(new THREE.Vector3().fromArray(center));
+
+            return new collision.OBB(p, boxBases, sc, parent);
+        } else {
+            return null;
+        }
+    };
+
 
 
     /**
-     * Creates a three.js object that corresponds to an OrientedBoundingBox
+     * Creates a three.js object that corresponds to an OBB
      *
      * @class
-     * @param {OrientedBoundingBox} obb the OBB to be shown with the
+     * @param {OBB} obb the OBB to be shown with the
      *                                       object
      * @return {THREE.Mesh}                  the three.js object indicating
      *                                       the OBB
@@ -874,7 +940,7 @@ function (THREE, numeric, _) {
 
     /**
      * Calculates the vertices of multiple OBBs
-     * @param  {OrientedBoundingBox[]} obbs the OBBs to calculate the
+     * @param  {OBB[]} obbs the OBBs to calculate the
      *                                      vertices of
      * @return {THREE.Vector3[]}            an array of the vertices of all
      *                                      the OBBs
@@ -890,7 +956,7 @@ function (THREE, numeric, _) {
 
     /**
      * Calculates the bounding sphere of multiple OBBs
-     * @param  {OrientedBoundingBox[]} obbs
+     * @param  {OBB[]} obbs
      * @return {THREE.Sphere}               the bounding sphere of the given
      *                                      OBBs
      */

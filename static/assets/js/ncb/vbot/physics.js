@@ -21,7 +21,7 @@ function (THREE, numeric, _, collision) {
          *
          * @typedef {Object} module:vbot/physics~PhysicsObject
          * @property {THREE.Sphere} boundingSphere the bounding sphere of the object
-         * @property {Array.<module:vbot/collision~OrientedBoundingBox>} obbs all of the OBBs
+         * @property {Array.<module:vbot/collision.OBB>} obbs all of the OBBs
          *                                                      for the object
          * @property {Number} verticalVelocity the vertical velocity in m/s
          * @property {string} type the type of the object (static, dynamic, or ground)
@@ -39,6 +39,52 @@ function (THREE, numeric, _, collision) {
          *                                     of the object, used by the
          *                                     graphics engine
          */
+
+        /**
+         * Builds an OBB around a robot's core (everything other than the arms)
+         *
+         * @param {THREE.Object3D} robot the robot parent
+         * @param {Array.<collision.OBB>} obbs the robot's OBBs
+         * @returns {collision.OBB}
+         */
+        function buildRobotBroadOBB(robot, obbs) {
+            // List all the bones
+            var bones = [];
+            robot.children[0].children[0].traverse(function (bone) {
+                bones.push(bone);
+            });
+            // Find the arm bones
+            var armBones = [];
+            // If there are arms, then there are arm bones
+            if (robot.larm !== undefined) {
+                [robot.larm, robot.rarm].forEach(function (arm) {
+                    arm.traverse(function (bone) {
+                        armBones.push(bone);
+                    });
+                });
+            }
+            // Make a list of non-arm bones
+            var coreBones = _.difference(bones, armBones);
+            // Index the non-arm bones by name
+            var boneIndex = {};
+            coreBones.forEach(function (bone) {
+                boneIndex[bone.name] = bone;
+            });
+            // Fill an array with the OBBs of non-arm bones
+            var nonBoneOBBs = [];
+            obbs.forEach(function (obb) {
+                if (boneIndex.hasOwnProperty(obb.name)) {
+                    nonBoneOBBs.push(obb);
+                }
+            });
+            // Calculate the vertices of the non-arm bone OBBs
+            var nonArmVertices = nonBoneOBBs.reduce(function (acc, obb) {
+                acc.push.apply(acc, obb.calcVertices());
+                return acc;
+            }, []);
+            // Build an OBB around those vertices and return it
+            return collision.OBB.fromPoints(nonArmVertices, robot);
+        }
 
         /**
          * Initializes a CombinedPhysicsObject as a dynamic object.
@@ -65,6 +111,10 @@ function (THREE, numeric, _, collision) {
 
             if (obj.physics.state === "controlled") {
                 obj.physics.obbs = buildRobotOBBs(obj.geometry);
+                // Build a broad OBB around the torso and legs
+                obj.geometry.broadOBB = buildRobotBroadOBB(obj.geometry,
+                    obj.physics.obbs);
+                obj.geometry.parent.add(new collision.OBBHelper(obj.geometry.broadOBB));
                 robot = obj;
             } else {
                 obj.physics.obbs =
@@ -78,7 +128,7 @@ function (THREE, numeric, _, collision) {
                             u = [new Vec(1, 0, 0),
                                  new Vec(0, 1, 0),
                                  new Vec(0, 0, 1)];
-                        return new collision.OrientedBoundingBox(c, u, e.toArray(), obj.geometry);
+                        return new collision.OBB(c, u, e.toArray(), obj.geometry);
                     }()];
             }
             obj.physics.obbs.forEach(function (obb) {
@@ -292,7 +342,7 @@ function (THREE, numeric, _, collision) {
          * @param  {module:vbot/physics~CombinedPhysicsObject} obj
          * @param  {number} scale how tightly the boxes will bound the
          *                        object
-         * @return {Array.<module:vbot/collision~OrientedBoundingBox>}
+         * @return {Array.<module:vbot/collision.OBB>}
          */
         function buildObjectOBBs(obj, scale) {
             // Calculate bounding box
@@ -318,7 +368,7 @@ function (THREE, numeric, _, collision) {
              */
             function findIntersectingFaces(box, faces) {
                 return faces.filter(function (face) {
-                    return collision.OrientedBoundingBox.fromBox3(box).testTri(face);
+                    return collision.OBB.fromBox3(box).testTri(face);
                 });
             }
 
@@ -542,7 +592,7 @@ function (THREE, numeric, _, collision) {
             });
 
             // We'll convert those to OBBs
-            return boxes.map(collision.OrientedBoundingBox.fromBox3);
+            return boxes.map(collision.OBB.fromBox3);
         }
 
         /**
@@ -559,7 +609,7 @@ function (THREE, numeric, _, collision) {
          *
          * @memberof module:vbot/physics~
          * @param  {THREE.Object3D} robot     the robot object
-         * @return {module:vbot/collision~OrientedBoundingBox[]} the OBBs of the bones
+         * @return {module:vbot/collision.OBB[]} the OBBs of the bones
          */
         function buildRobotOBBs(robot) {
            var s = robot.children[0].geometry;
@@ -590,75 +640,18 @@ function (THREE, numeric, _, collision) {
                    }
 
                    boneMap[maxIndex].push(i);
-                   vertexWeights[i] = /*findFaces(s.faces, i).
-                       map(findFaceArea.bind(null, s.vertices)).
-                       reduce(function (x, y) { return x+y; })*/ 1;
                }
            }
 
-           /**
-            * Project given points onto the given axis.
-            *
-            * @param  {THREE.Vector3} basis    the axis to project onto
-            * @param  {THREE.Vector3[]} points the points to project
-            * @return {number[]}               the projections of the points
-            */
-           function projectPoints(basis, points) {
-               return points.map(function (pt) { return numeric.dot(basis, pt); });
-           }
 
            Object.keys(boneMap).forEach(function (boneIndex) {
                var bone = robot.children[0].skeleton.bones[boneIndex],
                    vertices = boneMap[boneIndex].map(function (vertIndex) {
-                           return (s.vertices[vertIndex].clone()).toArray();
+                           return bone.localToWorld(s.vertices[vertIndex].clone());
                        }),
-                   weights = boneMap[boneIndex].map(function (vertIndex) {
-                           return vertexWeights[vertIndex];
-                       }),
-                   totalWeight = weights.reduce(function (x, y) {
-                           return x + y;
-                       }),
-                   weightedVertices = _.zip(vertices, weights).
-                       map(function (params) {
-                           var vert = params[0],
-                               weight = params[1];
-                           return numeric.mul(vert, weight);
-                       }),
-                   centroid = numeric.div(weightedVertices.reduce(function (x,y) {
-                           return numeric.add(x,y);
-                       }), totalWeight),
-                   covariance = weightedVertices.map(function (x) {
-                           var diff = [numeric.sub(x, centroid)];
-                           return numeric.dot(numeric.transpose(diff), diff);
-                       }).reduce(function (cov, x) {
-                           return numeric.add(cov, x);
-                       });
+                   obb = collision.OBB.fromPoints(vertices, bone);
 
-               if (vertices.length > 2) {
-                   var eigen = numeric.eig(covariance);
-
-                   var E = eigen.E.x;
-                   var sc = [0, 0, 0];
-                   var center = [0, 0, 0];
-                   var boxBases = [];
-
-                   for (var i = 0; i < 3; i += 1) {
-                       var basis = [E[0][i], E[1][i], E[2][i]];
-                       var projectedPoints = projectPoints(basis, vertices);
-                       var max = Math.max.apply(Math, projectedPoints);
-                       var min = Math.min.apply(Math, projectedPoints);
-                       var middle = (max + min) / 2;
-                       boxBases.push(new THREE.Vector3(E[0][i], E[1][i], E[2][i]));
-                       center = numeric.add(center, numeric.dot(basis, middle));
-                       sc[i] = (max - min)/2;
-                   }
-
-                   var p = bone.worldToLocal(
-                       robot.children[0].localToWorld(
-                           new THREE.Vector3().fromArray(center)));
-
-                   var obb = new collision.OrientedBoundingBox(p, boxBases, sc, bone);
-
+               if (obb !== null) {
                    boxes.push(obb);
                }
            });
@@ -1106,7 +1099,7 @@ function (THREE, numeric, _, collision) {
                 updateObjects: updateObjects,
                 changeObjectState: changeObjectState,
                 resolveCollisions: resolveCollisions,
-                //toggleCollisionVolumes: toggleCollisionVolumes,
+                toggleCollisionVolumes: toggleCollisionVolumes,
                 setCollisionVolumeResolution: setCollisionVolumeResolution
             };
     }());
