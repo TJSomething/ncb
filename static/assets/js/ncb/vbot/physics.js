@@ -11,7 +11,7 @@ function (THREE, numeric, _, collision) {
         var physicsObjects = [],
             // This is used to quickly address objects
             objectIndices = {},
-            staticCollisionResolution = 1,
+            staticCollisionResolution = 0.1,
             collisionVolumeObjects = new THREE.Object3D(),
             groundElevation = Infinity,
             robot;
@@ -61,45 +61,7 @@ function (THREE, numeric, _, collision) {
             
             return armBones;
         }
-
-        /**
-         * Builds an OBB around a robot's core (everything other than the arms)
-         *
-         * @param {THREE.Object3D} robot the robot parent
-         * @param {Array.<collision.OBB>} obbs the robot's OBBs
-         * @returns {collision.OBB}
-         */
-        function buildRobotBroadOBB(robot, obbs) {
-            // List all the bones
-            var bones = [];
-            robot.children[0].children[0].traverse(function (bone) {
-                bones.push(bone);
-            });
-            // Find the arm bones
-            var armBones = findArmBones(robot);
-            // Make a list of non-arm bones
-            var coreBones = _.difference(bones, armBones);
-            // Index the non-arm bones by name
-            var boneIndex = {};
-            coreBones.forEach(function (bone) {
-                boneIndex[bone.name] = bone;
-            });
-            // Fill an array with the OBBs of non-arm bones
-            var nonBoneOBBs = [];
-            obbs.forEach(function (obb) {
-                if (boneIndex.hasOwnProperty(obb.name)) {
-                    nonBoneOBBs.push(obb);
-                }
-            });
-            // Calculate the vertices of the non-arm bone OBBs
-            var nonArmVertices = nonBoneOBBs.reduce(function (acc, obb) {
-                acc.push.apply(acc, obb.calcVertices());
-                return acc;
-            }, []);
-            // Build an OBB around those vertices and return it
-            return collision.OBB.fromPoints(nonArmVertices, robot);
-        }
-
+        
         /**
          * Initializes a CombinedPhysicsObject as a dynamic object.
          *
@@ -126,14 +88,17 @@ function (THREE, numeric, _, collision) {
             if (obj.physics.state === "controlled") {
                 obj.physics.obbs = buildRobotOBBs(obj.geometry);
                 // Build a broad OBB around the torso and legs
-                obj.geometry.broadOBB = buildRobotBroadOBB(obj.geometry,
-                    obj.physics.obbs);
+                obj.geometry.broadOBB = obj.physics.obbs[0];
                 // Make a set of the arms bones. We're going to
                 // handle arm collisions differently from body collisions
                 obj.geometry.armBones = findArmBones(obj.geometry).reduce(function (boneSet, bone) {
                     boneSet[bone.name] = true;
                     return boneSet;
                 }, {});
+                obj.physics.obbs.forEach(function (obb) {
+                    obj.geometry.parent.add(
+                        new collision.OBBHelper(obb));
+                });
                 obj.geometry.parent.add(new collision.OBBHelper(obj.geometry.broadOBB));
                 robot = obj;
             } else {
@@ -616,6 +581,61 @@ function (THREE, numeric, _, collision) {
         }
 
         /**
+         * Figures out which vertices are attached to which bone.
+         *
+         * It is expected that we pass in the parent of the actual robot object,
+         * which consists of a single THREE.SkinnedMesh.
+         *
+         * @memberof module:vbot/physics~
+         * @param {THREE.Object3D} robot the robot parent
+         * @returns {object} a map from bone names to the vertices of that bone
+         */
+        function getRobotBoneVertices(robot) {
+            var s = robot.children[0].geometry;
+            var boneMap = {};
+            var i, j;
+            var vertexWeights = {};
+            var bonePointMap = {};
+
+            // Find which vertices belong to which bone
+            for (i = 0; i < s.skinWeights.length; i += 1) {
+                var idxs = s.skinIndices[i].toArray(),
+                    weights = s.skinWeights[i].toArray(),
+                    maxWeight = -Infinity,
+                    maxIndex = undefined;
+
+                for (j = 0; j < 4; j += 1) {
+                    if (maxWeight !== undefined &&
+                        maxWeight < weights[j]) {
+                        maxWeight = weights[j];
+                        maxIndex = idxs[j];
+                    }
+                }
+
+                if (maxIndex !== undefined &&
+                    weights[1] !== undefined) {
+                    if (!boneMap.hasOwnProperty(maxIndex)) {
+                        boneMap[maxIndex] = [];
+                    }
+
+                    boneMap[maxIndex].push(i);
+                }
+            }
+
+
+            Object.keys(boneMap).forEach(function (boneIndex) {
+                var bone = robot.children[0].skeleton.bones[boneIndex];
+
+                bonePointMap[bone.name] =
+                    boneMap[boneIndex].map(function (vertIndex) {
+                        return robot.children[0].localToWorld(s.vertices[vertIndex].clone());
+                    });
+            });
+
+            return bonePointMap;
+        }
+
+        /**
          * Builds an array of OBBs for a skinned robot.
          *
          * Each OBB corresponds to a bone in the robot, fitting around all
@@ -632,51 +652,35 @@ function (THREE, numeric, _, collision) {
          * @return {module:vbot/collision.OBB[]} the OBBs of the bones
          */
         function buildRobotOBBs(robot) {
-           var s = robot.children[0].geometry;
-           var boneMap = {};
-           var i, j;
-           var boxes = [];
-           var vertexWeights = {};
+            var bonePointMap = getRobotBoneVertices(robot),
+                armBones = findArmBones(robot),
+                armBoneNameSet = armBones.reduce(function (boneSet, bone) {
+                    boneSet[bone.name] = true;
+                    return boneSet;
+                }, {}),
+                armOBBs = armBones.map(function (bone) {
+                    if (bonePointMap.hasOwnProperty(bone.name)) {
+                        return collision.OBB.fromPoints(bonePointMap[bone.name], bone);
+                    } else {
+                        return null;
+                    }
+                }),
+                bodyVertices = Object.keys(bonePointMap).reduce(function (vertices, bone) {
+                    if (!armBoneNameSet.hasOwnProperty(bone)) {
+                        vertices.push.apply(vertices, bonePointMap[bone]);
+                    }
+                    return vertices;
+                }, []),
+                bodyOBB = collision.OBB.fromPoints(bodyVertices, robot),
+                boxes = [bodyOBB];
 
-           // Find which vertices belong to which bone
-           for (i = 0; i < s.skinWeights.length; i += 1) {
-               var idxs = s.skinIndices[i].toArray(),
-                   weights = s.skinWeights[i].toArray(),
-                   maxWeight = -Infinity,
-                   maxIndex = undefined;
+            armOBBs.forEach(function (obb) {
+                if (obb) {
+                    boxes.push(obb);
+                }
+            });
 
-               for (j = 0; j < 4; j += 1) {
-                   if (maxWeight !== undefined &&
-                       maxWeight < weights[j]) {
-                       maxWeight = weights[j];
-                       maxIndex = idxs[j];
-                   }
-               }
-
-               if (maxIndex !== undefined &&
-                   weights[1] !== undefined) {
-                   if (!boneMap.hasOwnProperty(maxIndex)) {
-                       boneMap[maxIndex] = [];
-                   }
-
-                   boneMap[maxIndex].push(i);
-               }
-           }
-
-
-           Object.keys(boneMap).forEach(function (boneIndex) {
-               var bone = robot.children[0].skeleton.bones[boneIndex],
-                   vertices = boneMap[boneIndex].map(function (vertIndex) {
-                           return bone.localToWorld(s.vertices[vertIndex].clone());
-                       }),
-                   obb = collision.OBB.fromPoints(vertices, bone);
-
-               if (obb !== null) {
-                   boxes.push(obb);
-               }
-           });
-
-           return boxes;
+            return boxes;
         }
 
         /**
@@ -726,9 +730,6 @@ function (THREE, numeric, _, collision) {
                                 } else if (obb2.name &&
                                            obb2.name !== obj2.name) {
                                     collision.bodyPart = obb2.name;
-                                }
-                                if (collision.bodyPart) {
-                                    console.log(collision.bodyPart);
                                 }
 
                                 if (collision.penetration > bestCollision.penetration) {
@@ -905,6 +906,7 @@ function (THREE, numeric, _, collision) {
          * @param  {module:vbot/physics~CombinedPhysicsObject} obj
          */
         function resolveCollision(dt, obj) {
+            var height = 0;
             /**
              * Resolves collisions between the robot and another object.
              *
@@ -919,12 +921,17 @@ function (THREE, numeric, _, collision) {
                 if (newCollision &&
                     (newCollision.type === 'ground' ||
                      otherObject.physics.state !== 'held')) {
-                    // If it's a horizontal collision, check if the object can be climbed
-                    if (newCollision.contactNormal.y < newCollision.contactNormal.x +
-                                                       newCollision.contactNormal.z &&
+                    var horizDist = Math.sqrt(newCollision.contactNormal.x * newCollision.contactNormal.x +
+                                              newCollision.contactNormal.z * newCollision.contactNormal.z);
+                                              
+                    // If it's a horizontal collision with non-ground, check if the object can bestCollision
+                    // climbed
+                    if (Math.abs(newCollision.contactNormal.y) < horizDist &&
                         !obj.geometry.armBones.hasOwnProperty(newCollision.name)) {
+                        
+                        
                         obj.geometry.position.y += staticCollisionResolution;
-                        updateObjectLocation(obj);
+                        updateObjectLocation(obj); 
                         // Run collision detection again
                         newCollision = detectCollision(obj, otherObject);
                         // If it can't be climbed
@@ -932,18 +939,23 @@ function (THREE, numeric, _, collision) {
                             // Undo the climbing
                             obj.geometry.position.y -= staticCollisionResolution;
                         } else {
+                            height = obj.geometry.position.y;
                             return;
                         }
                     }
-                    // Add the displacement needed to resolve the collision
+                    
                     displacement = newCollision.contactNormal.clone().
                             multiplyScalar(newCollision.penetration);
+                    
+                    // Add the displacement needed to resolve the collision
                     obj.geometry.position.add(displacement);
-
+                    
                     // If we get pushed up, stop falling
                     if (displacement.y > 0) {
                         obj.physics.verticalVelocity = 0;
                     }
+
+                    
                     updateObjectLocation(obj);
                 }
             }

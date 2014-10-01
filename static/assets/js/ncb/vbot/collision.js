@@ -93,7 +93,7 @@ function (THREE, numeric, _) {
          * the properties based on the parent of this OBB. This speeds up
          * collision detection.
          *
-         * @instancecollision.OBB
+         * @instance collision.OBB
          * @memberof OBB
          * @return {OBB} a dumb copy of this
          *                                            OBB
@@ -858,8 +858,11 @@ function (THREE, numeric, _) {
      */
     collision.OBB.fromPoints = function (vertices, parent) {
         function projectPoints(basis, points) {
-            return points.map(function (pt) { return numeric.dot(basis, pt); });
+            return points.map(function (pt) {
+                return numeric.dot(basis, pt);
+            });
         }
+        
         // Convert the vertices from THREE.Vector3s to arrays
         vertices = vertices.map(function (vertex) {
             return parent.worldToLocal(vertex.clone()).toArray();
@@ -882,6 +885,7 @@ function (THREE, numeric, _) {
             var sc = [0, 0, 0];
             var center = [0, 0, 0];
             var boxBases = [];
+            var det = numeric.det(E);
 
             for (var i = 0; i < 3; i += 1) {
                 var basis = [E[0][i], E[1][i], E[2][i]];
@@ -890,11 +894,16 @@ function (THREE, numeric, _) {
                 var min = Math.min.apply(Math, projectedPoints);
                 var middle = (max + min) / 2;
                 boxBases.push(new THREE.Vector3(E[0][i], E[1][i], E[2][i]));
-                center[i] = middle;
+                var basisSign = Math.sign(
+                    _.max(basis, Math.abs)
+                );
+                center = numeric.add(center, numeric.mul(basis, middle));
+                
                 sc[i] = (max - min) / 2;
+                
             }
 
-            var p = parent.localToWorld(new THREE.Vector3().fromArray(center));
+            var p = new THREE.Vector3().fromArray(center);
 
             return new collision.OBB(p, boxBases, sc, parent);
         } else {
