@@ -818,7 +818,16 @@ function (THREE, numeric, _) {
      * @return {OBB}
      */
     collision.OBB.fromBox3 =
-        function (box) {
+        function (box, parent) {
+            if (parent instanceof THREE.Object3D) {
+                return new collision.OBB(box.center(),
+                    [new THREE.Vector3(1, 0, 0),
+                     new THREE.Vector3(0, 1, 0),
+                     new THREE.Vector3(0, 0, 1)],
+                    box.size().divideScalar(2).toArray(),
+                    parent);
+            }
+            
             return Object.create(collision.OBB.prototype, {
                 c: {
                     writable: false,

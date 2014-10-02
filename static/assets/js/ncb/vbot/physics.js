@@ -95,11 +95,6 @@ function (THREE, numeric, _, collision) {
                     boneSet[bone.name] = true;
                     return boneSet;
                 }, {});
-                obj.physics.obbs.forEach(function (obb) {
-                    obj.geometry.parent.add(
-                        new collision.OBBHelper(obb));
-                });
-                obj.geometry.parent.add(new collision.OBBHelper(obj.geometry.broadOBB));
                 robot = obj;
             } else {
                 obj.physics.obbs =
@@ -118,7 +113,15 @@ function (THREE, numeric, _, collision) {
             }
             obj.physics.obbs.forEach(function (obb) {
                 collisionVolumeObjects.add(collision.OBBHelper(obb));
-            });            
+            });
+            var scene = obj.geometry.parent;
+            while (scene.parent) {
+                scene = scene.parent;
+            }
+            obj.physics.obbs.forEach(function (obb) {
+                scene.add(
+                    new collision.OBBHelper(obb));
+            });
 
             obj.physics.boundingSphere = collision.calcBoundingSphereFromOBBs(obj.physics.obbs);
 
@@ -671,7 +674,7 @@ function (THREE, numeric, _, collision) {
                     }
                     return vertices;
                 }, []),
-                bodyOBB = collision.OBB.fromPoints(bodyVertices, robot),
+                bodyOBB = collision.OBB.fromBox3(new THREE.Box3().setFromPoints(bodyVertices), robot),
                 boxes = [bodyOBB];
 
             armOBBs.forEach(function (obb) {
@@ -906,7 +909,6 @@ function (THREE, numeric, _, collision) {
          * @param  {module:vbot/physics~CombinedPhysicsObject} obj
          */
         function resolveCollision(dt, obj) {
-            var height = 0;
             /**
              * Resolves collisions between the robot and another object.
              *
@@ -927,9 +929,7 @@ function (THREE, numeric, _, collision) {
                     // If it's a horizontal collision with non-ground, check if the object can bestCollision
                     // climbed
                     if (Math.abs(newCollision.contactNormal.y) < horizDist &&
-                        !obj.geometry.armBones.hasOwnProperty(newCollision.name)) {
-                        
-                        
+                        !obj.geometry.armBones.hasOwnProperty(newCollision.bodyPart)) {
                         obj.geometry.position.y += staticCollisionResolution;
                         updateObjectLocation(obj); 
                         // Run collision detection again
@@ -939,7 +939,6 @@ function (THREE, numeric, _, collision) {
                             // Undo the climbing
                             obj.geometry.position.y -= staticCollisionResolution;
                         } else {
-                            height = obj.geometry.position.y;
                             return;
                         }
                     }
