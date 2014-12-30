@@ -942,6 +942,8 @@ function (THREE, physics, motion) {
             app.scene.add(robot);
             // Odometer!
             robot.odometer = 0;
+            // Remove the robot's parent
+            obj.parent.remove(obj);
 
             // Load the robot model asynchronously
             modelLoaders[robotType](robot);
