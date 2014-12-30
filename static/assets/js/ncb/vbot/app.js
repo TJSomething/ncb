@@ -411,9 +411,15 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
                 if (!app.robot) {
                     robot = new THREE.Object3D();
                     robot.position.set(0, 0, 0);
+                    robot.name = "Robot";
                     app.scene.add(robot);
 
                     initRobot(robot);
+
+                    // We can't say we're done without a robot.
+                    // This function will trigger again when the robot
+                    // loads.
+                    return;
                 }
 
                 if (!app.camera) {
