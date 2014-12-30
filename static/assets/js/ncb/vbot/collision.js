@@ -813,14 +813,17 @@ function (THREE, numeric, _) {
      *
      * Note a THREE.Box3 is an axis-aligned bounding box.
      *
-     * @memberof module:vbot/physics~
      * @param  {THREE.Box3} box
      * @return {OBB}
      */
     collision.OBB.fromBox3 =
         function (box, parent) {
             if (parent instanceof THREE.Object3D) {
-                return new collision.OBB(box.center(),
+                var invMat = new THREE.Matrix4().getInverse(
+                    parent.matrixWorld
+                );
+
+                return new collision.OBB(box.center().applyMatrix4(invMat),
                     [new THREE.Vector3(1, 0, 0),
                      new THREE.Vector3(0, 1, 0),
                      new THREE.Vector3(0, 0, 1)],
@@ -859,7 +862,7 @@ function (THREE, numeric, _) {
         };
 
     /**
-     *  Fits an OBB to a bunch of bytes
+     *  Fits an OBB to a bunch of vertices
      *
      * @param {Array.<THREE.Vector3>} vertices global vertices for the object
      * @param {THREE.Object3D} parent the parent object for this OBB
