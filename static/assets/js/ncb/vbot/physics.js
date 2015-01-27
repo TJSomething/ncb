@@ -5,7 +5,6 @@ define(['three', 'numeric', 'underscore', 'vbot/collision'],
 function (THREE, numeric, _, collision) {
     'use strict';
 
-    /** @exports vbot/physics */
 
     return (function () {
         var physicsObjects = [],
@@ -1137,7 +1136,8 @@ function (THREE, numeric, _, collision) {
             staticCollisionResolution = size;
         }
 
-        return {
+        /** @exports vbot/physics */
+        var physics = {
                 addObject: addObject,
                 detectCollisions: detectCollisions,
                 updateObjects: updateObjects,
@@ -1146,5 +1146,7 @@ function (THREE, numeric, _, collision) {
                 toggleCollisionVolumes: toggleCollisionVolumes,
                 setCollisionVolumeResolution: setCollisionVolumeResolution
             };
+
+        return physics;
     }());
 });
