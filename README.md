@@ -33,7 +33,7 @@ If you are on an Ubuntu machine, make sure Python 2.7 as well as pip are
 installed by running this command
 
 ~~~~
-sudo apt-get install python2.7 python-pip python-dev
+sudo apt-get install python2.7 python-pip python-dev curl
 ~~~~
 
 To install NCB’s Python dependencies, run this
@@ -75,6 +75,13 @@ Now that node is installed, we can install the node package dependencies.
 
 ~~~~
 npm install
+~~~~
+
+However, those are just the build dependencies. We need to use Bower to
+install the client dependencies.
+
+~~~~
+bower install
 ~~~~
 
 Now that everything is installed, we can build the project.
