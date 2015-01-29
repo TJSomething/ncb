@@ -1,6 +1,6 @@
 // We're loading all of our three.js dependencies and then adding a few of
 // our own convenience methods.
-define( ['three', 'OrbitControls', 'ColladaLoader'], function (THREE) {
+define( ['threejs', 'OrbitControls', 'ColladaLoader'], function (THREE) {
     // Let's deal with the fact that we can't normally attach objects
     //  to bones
     THREE.Bone.prototype.update = (function () {

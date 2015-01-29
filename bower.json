@@ -18,7 +18,7 @@
     "angular-xeditable": "~0.1.8",
     "jquery": "*",
     "jquery-ui": "~1.11.2",
-    "three.js": "~0.0.70",
+    "threejs": "r70",
     "esprima": "~1.2.2",
     "jszip": "~2.0.0",
     "threejs-stats": "*",

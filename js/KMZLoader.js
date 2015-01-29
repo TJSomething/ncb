@@ -1,6 +1,6 @@
 /* global THREE, JSZip */
 
-define(['three', 'ColladaLoader', 'jszip'],
+define(['threejs', 'ColladaLoader', 'jszip'],
 function (THREE, ColladaLoader, JSZip) {
     /**
      * Loads zipped Keyhole Markup Language files.

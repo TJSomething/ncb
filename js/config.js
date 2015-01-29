@@ -1,18 +1,18 @@
 var require = {
     baseUrl: 'assets/js/',
     shim: {
-        three: {
+        threejs: {
             exports: 'THREE'
         },
         OrbitControls: {
             deps: [
-                'three'
+                'threejs'
             ],
             exports: 'THREE'
         },
         ColladaLoader: {
             deps: [
-                'three'
+                'threejs'
             ],
             exports: 'THREE'
         },
@@ -30,7 +30,6 @@ var require = {
         }
     },
     paths: {
-        three: '../bower_components/three.js/three.min',
         OrbitControls: './lib/OrbitControls',
         ColladaLoader: './lib/ColladaLoader',
         almond: '../bower_components/almond/almond',
@@ -53,7 +52,8 @@ var require = {
         jszip: '../bower_components/jszip/jszip.min',
         numericjs: '../bower_components/numericjs/src/numeric',
         'threejs-stats': '../bower_components/threejs-stats/Stats',
-        'threex-colladaloader': '../bower_components/threex-colladaloader/ColladaLoader'
+        'threex-colladaloader': '../bower_components/threex-colladaloader/ColladaLoader',
+        threejs: '../bower_components/threejs/build/three'
     },
     packages: [
 
