@@ -1,5 +1,5 @@
-# ignore upload folder
-uploads/
-exports/
-#temp.json
-/static/nbproject/private/
+bower_components/
+node_modules/
+build/
+tmp/
+.ropeproject/

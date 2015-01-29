@@ -1,0 +1,32 @@
+<!-- Main Div for containing the Model Builder page -->
+<div id="model" class="container">
+    
+    <!-- Model Configuration Header -->
+    <div class="page-header" data-ng-controller="ModelHeaderController as headerCtrl">
+        <div class="row">
+        	<div class='col-lg-12'>
+        		<h3>
+                <button type="button" class="btn btn-danger btn-md pull-right" data-target="#clearModelModal" data-toggle="modal">Clear Model</button>
+        		<button type="button" class="btn btn-default" data-snap-toggle="left" data-ng-click="headerCtrl.hideSidePanel()">
+        			<span class="glyphicon glyphicon-th-list"></span>
+        		</button>
+        		Model Configuration
+        		</h3>
+        	</div>
+        </div>
+    </div>
+    <!-- End Header -->
+	
+
+	<!-- Modularization of Each Element of the page broken up into pieces -->
+    <div class="row">
+        <div class="col-lg-4" data-ng-controller="ModelBuilderController as modelCtrl">
+            <!--(bake components/leftmenu.html)-->
+        </div>
+        <div class="col-lg-8" data-ng-controller="ModelParametersController as mParamsCtrl">
+            <!--(bake components/rightmenu.html)-->
+        </div>
+    </div>
+    <!-- End Modularization -->
+</div>
+<!-- End Main Div -->

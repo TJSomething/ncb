@@ -1,0 +1,54 @@
+<!-- EXPORT MODEL MODAL BEGIN -->
+<!-- Modal -->
+<div class="modal fade" id="importModelModal" tabindex="-1" role="dialog" data-ng-controller="ImportModelController as importCtrl">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title">Import Model</h4>
+            </div>
+            <div class="modal-body">
+              <form id="uploadFileForm" class="form-horizontal" role="form" method="POST" >
+
+                    <div class="well well-sm">
+                        <input type="file" id="import-file" name="import-file">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalType" class="col-sm-4 control-label"> Import To</label>
+                        <div class="col-sm-8">
+                            <select class="form-control" data-ng-model="importCtrl.importType">
+                                <option value='local'>Local</option>
+                                <option value='database'>Database</option>
+                            </select>
+                            <br>
+                        </div>
+                    </div>
+                    <!--
+                    <div class="form-group">
+                        <label for="uploadFileForm" class="col-sm-4 control-label"> Model Name</label>
+                        <div class="col-sm-8">
+                            <input id="import-file" type="file" class="form-control" name="import-file">
+                            <br>
+                        </div>
+                    </div>
+                    -->
+<!--
+                    <div class="form-group" data-ng-show="importCtrl.saveType == 'file'">
+                        <label for="filename" class="col-sm-4 control-label"> Filename</label>
+                        <div class="col-sm-8">
+                            <input id="filename" type="text" placeholder="Filename" class="form-control" data-ng-model="importCtrl.filename">
+                            <br>
+                        </div>
+                    </div>
+-->
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-success" data-dismiss="modal" data-ng-click="importCtrl.importModel()">Import</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- EXPORT MODEL MODAL END -->
