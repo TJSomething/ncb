@@ -13,7 +13,8 @@ function (THREE, utils) {
         worker,
         actionsCompleted = [],
         app,
-        keys = {};
+        keys = {},
+        sensors = {};
 
     /**
      * Loads some useful objects into the controller scope.
@@ -22,10 +23,12 @@ function (THREE, utils) {
      * @param {Object} vbotApp the virtual robot application state
      */
     function init(vbotApp) {
-        app = vbotApp;
-        robot = app.robot;
-        capabilities = getCapabilities();
-        initKeyboardListener();
+        if (!app) {
+            app = vbotApp;
+            robot = app.robot;
+            capabilities = getCapabilities();
+            initKeyboardListener();
+        }
     }
 
     /**
@@ -346,12 +349,13 @@ function (THREE, utils) {
      * @param  {Number} dt the time step length
      */
     function step(dt) {
+        sensors = sense();
         if (worker !== undefined) {
             // Delete all the completed actions from the action queue
             actionsCompleted.forEach(removeCompletedAction);
 
             worker.postMessage({
-                sensors: sense(),
+                sensors: sensors,
                 actionsCompleted: actionsCompleted,
                 step: dt
             });
@@ -730,6 +734,7 @@ function (THREE, utils) {
     return {
         init: init,
         test: test,
-        step: step
+        step: step,
+        get sensors() {return sensors;}
     };
 });

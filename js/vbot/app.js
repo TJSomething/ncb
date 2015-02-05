@@ -2,8 +2,8 @@
 /* global THREE, $:false, _:false, Stats, console */
 
 define(['vbot/three', 'threejs-stats', 'vbot/utils', 'vbot/robot', 'vbot/physics',
-        'vbot/controller', 'KMZLoader'],
-function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
+        'vbot/controller', 'KMZLoader', 'vbot/hud'],
+function (THREE, Stats, utils, Robot, physics, controller, KMZLoader, makeHUD) {
     'use strict';
 
     /**
@@ -818,6 +818,12 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
         physics.toggleCollisionVolumes(app.scene);
     };
 
+    // When the scene's ready, add the HUD
+    app.on('scene-ready', function () {
+        controller.init(app);
+    });
+    app.hud = makeHUD(app);
+
     app.on('scene-loaded', readyScene);
 
     app.on('scene-ready', startLoop);
@@ -831,6 +837,7 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader) {
         physics.detectCollisions();
         physics.resolveCollisions(dt);
         controller.step(dt);
+        app.hud.update(controller.sensors);
     });
 
     app.on('render', (function () {

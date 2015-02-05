@@ -27,6 +27,9 @@ var require = {
         },
         jszip: {
             exports: 'JSZip'
+        },
+        angular: {
+            exports: 'angular'
         }
     },
     paths: {
