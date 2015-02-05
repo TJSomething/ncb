@@ -727,8 +727,11 @@ function (THREE, utils) {
                     otherKeys[event.keyCode] :
                     String.fromCharCode(e.which);
             console.log(keyName + ' up');
-            keys[keyName] = false;
-        })
+            delete keys[keyName];
+        });
+        window.addEventListener('blur', function (e) {
+            keys = {};
+        });
     }
 
     return {
