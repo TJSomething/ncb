@@ -166,20 +166,12 @@ function (THREE, Stats, utils, Robot, physics, controller, KMZLoader, makeHUD) {
 
         // FPS indicators
         app.renderStats = new Stats();
-        app.renderStats.domElement.style.position = 'absolute';
-        app.renderStats.domElement.style.top = '0px';
-        app.renderStats.domElement.style.left = '0px';
         app.renderStats.setMode(1);
-        app.container.appendChild(app.renderStats.domElement);
 
         taskDone();
 
         app.logicStats = new Stats();
-        app.logicStats.domElement.style.position = 'absolute';
-        app.logicStats.domElement.style.top = '50px';
-        app.logicStats.domElement.style.left = '0px';
         app.logicStats.setMode(1);
-        app.container.appendChild(app.logicStats.domElement);
 
         taskDone();
     }

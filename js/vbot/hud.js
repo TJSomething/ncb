@@ -10,7 +10,14 @@ function (angular, $) {
             // Insert a DOM element on top of the canvas
             var hudElem = document.createElement('div');
             hudElem.id = 'vbot-hud';
+
             app.container.appendChild(hudElem);
+
+            // Move the performance stats into the HUD
+            hudElem.appendChild(document.createTextNode('Rendering:'));
+            hudElem.appendChild(app.renderStats.domElement);
+            hudElem.appendChild(document.createTextNode('Logic:'));
+            hudElem.appendChild(app.logicStats.domElement);
 
             // I think this makes a new scope, attaches it to the new HUD element,
             // and pulls out a closure that updates the element
