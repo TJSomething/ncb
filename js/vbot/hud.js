@@ -74,16 +74,35 @@ function (angular, $) {
 
                 // Add a toggling hide/show
                 var hidden = false;
+                function show() {
+                    $(hudElem).animate({
+                        left: '-25px'
+                    }, { queue: false });
+                }
+                function hide() {
+                    $(hudElem).animate({
+                        left: (-hudElem.scrollWidth + 5) + 'px'
+                    }, { queue: false });
+                }
+
+                // Show on hover
+                hudElem.addEventListener('mouseenter', function (e) {
+                    if (hidden) {
+                        show();
+                    }
+                });
+                hudElem.addEventListener('mouseleave', function (e) {
+                    if (hidden) {
+                        hide();
+                    }
+                });
+                // Toggle showing with click
                 hudElem.addEventListener('click', function (e) {
                     if (hidden) {
-                        $(hudElem).animate({
-                            left: '-25px'
-                        });
+                        show();
                         hidden = false;
                     } else {
-                        $(hudElem).animate({
-                            left: (-hudElem.scrollWidth + 5) + 'px'
-                        });
+                        hide();
                         hidden = true;
                     }
                 });
