@@ -13,40 +13,51 @@ function (angular, $) {
 
             app.container.appendChild(hudElem);
 
-            // Move the performance stats into the HUD
-            hudElem.appendChild(document.createTextNode('Rendering:'));
-            hudElem.appendChild(app.renderStats.domElement);
-            hudElem.appendChild(document.createTextNode('Logic:'));
-            hudElem.appendChild(app.logicStats.domElement);
+            // Add a directive to inject raw HTMLElements
+            angular.module('vbot-hud', ['ng'])
+            .directive('rawElement', function () {
+                return {
+                    link: function (scope, element, attrs) {
+                        element.replaceWith(scope[attrs.rawElement]);
+                    }
+                };
+            });
 
-            // I think this makes a new scope, attaches it to the new HUD element,
-            // and pulls out a closure that updates the element
-            angular.injector(['ng']).invoke(['$compile', '$rootScope', function(compile, rootScope){
+            angular.injector(['vbot-hud']).invoke(['$compile', '$rootScope',
+            function(compile, rootScope){
                 var scope = rootScope.$new();
                 scope.sensors = {};
+                scope.renderStats = app.renderStats.domElement;
+                scope.logicStats = app.logicStats.domElement;
                 var template =
                         '<ul>' +
-                        '    <li>Speed: {{ sensors.speed | number }}</li>' +
-                        '    <li>Angular velocity: {{ sensors.angularVelocity | number }}</li>' +
-                        '    <li>Odometer: {{ sensors.odometer | number }}</li>' +
-                        '    <li>Heading: {{ sensors.compass | number }}</li>' +
-                        '    <li>Left-hand object: {{ sensors.arms.left.held || "&lt;none&gt;"}}</li>' +
-                        '    <li>Right-hand object: {{ sensors.arms.right.held || "&lt;none&gt;"}}</li>' +
-                        '    <li>Expression: {{ sensors.expression || "&lt;none&gt;"}}</li>' +
-                        '    <li>Collisions:' +
+                        '    <li>Rendering: <div raw-element="renderStats" /></li>' +
+                        '    <li>Logic: <div raw-element="logicStats" /></li>' +
+                        '    <li>Sensors:' +
                         '        <ul>' +
-                        '            <li>Top: {{sensors.collision.top}}</li>' +
-                        '            <li>Bottom: {{sensors.collision.bottom}}</li>' +
-                        '            <li>Left: {{sensors.collision.left}}</li>' +
-                        '            <li>Right: {{sensors.collision.right}}</li>' +
-                        '            <li>Front: {{sensors.collision.front}}</li>' +
-                        '            <li>Back: {{sensors.collision.back}}</li>' +
-                        '        </ul>' +
-                        '    </li>' +
-                        '    <li>Keys:' +
-                        '        <ul>' +
-                        '            <li ng-repeat="(key,val) in sensors.keys">' +
-                        '                {{key}}: {{val}}' +
+                        '            <li>Speed: {{ sensors.speed | number }}</li>' +
+                        '            <li>Angular velocity: {{ sensors.angularVelocity | number }}</li>' +
+                        '            <li>Odometer: {{ sensors.odometer | number }}</li>' +
+                        '            <li>Heading: {{ sensors.compass | number }}</li>' +
+                        '            <li>Left-hand object: {{ sensors.arms.left.held || "&lt;none&gt;"}}</li>' +
+                        '            <li>Right-hand object: {{ sensors.arms.right.held || "&lt;none&gt;"}}</li>' +
+                        '            <li>Expression: {{ sensors.expression || "&lt;none&gt;"}}</li>' +
+                        '            <li>Collisions:' +
+                        '                <ul>' +
+                        '                    <li>Top: {{sensors.collision.top}}</li>' +
+                        '                    <li>Bottom: {{sensors.collision.bottom}}</li>' +
+                        '                    <li>Left: {{sensors.collision.left}}</li>' +
+                        '                    <li>Right: {{sensors.collision.right}}</li>' +
+                        '                    <li>Front: {{sensors.collision.front}}</li>' +
+                        '                    <li>Back: {{sensors.collision.back}}</li>' +
+                        '                </ul>' +
+                        '            </li>' +
+                        '            <li>Keys:' +
+                        '                <ul>' +
+                        '                    <li ng-repeat="(key,val) in sensors.keys">' +
+                        '                        {{key}}: {{val}}' +
+                        '                    </li>' +
+                        '                </ul>' +
                         '            </li>' +
                         '        </ul>' +
                         '    </li>' +
