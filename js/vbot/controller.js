@@ -174,13 +174,19 @@ function (THREE, utils) {
      * @return {object} the sensor data
      */
     function sense() {
+        function calcCompass() {
+            var forward = new THREE.Vector4(1,0,0,0).applyMatrix4(robot.matrixWorld)));
+            var rad = Math.atan2(forward.x, forward.z);
+            return rad/Math.PI * 180 + 180;
+        }
+
         var sensors = {};
 
         if (capabilities.motion) {
             sensors.speed = robot.speed;
             sensors.angularVelocity = robot.angularVelocity;
             sensors.odometer = robot.odometer;
-            sensors.compass = utils.mod(90 - (robot.rotation.y * 180 / Math.PI), 360);
+            sensors.compass = calcCompass();
         }
 
         if (capabilities.arms) {
