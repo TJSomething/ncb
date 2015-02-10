@@ -117,10 +117,6 @@ function (THREE, numeric, _, collision) {
             while (scene.parent) {
                 scene = scene.parent;
             }
-            obj.physics.obbs.forEach(function (obb) {
-                scene.add(
-                    new collision.OBBHelper(obb));
-            });
 
             obj.physics.boundingSphere = collision.calcBoundingSphereFromOBBs(obj.physics.obbs);
 
