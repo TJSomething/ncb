@@ -33,44 +33,16 @@ requirejs(['jquery', 'vbot/app', 'vbot/controller'], function ($, VBOT, controll
 	} );
 
 	VBOT.on('scene-loaded', function () {
-        document.addEventListener( 'keydown', function (event) {
-            if (event.altKey) {
-                return;
-            }
-
-            switch (event.keyCode) {
-                case 83: // S
-                    VBOT.robot.speed = -1.7;
-                    break;
-                case 87: // W
-                    VBOT.robot.speed = 1.7;
-                    break;
-                case 65: // A
-                    VBOT.robot.angularVelocity = 1;
-                    break;
-                case 68: // D
-                    VBOT.robot.angularVelocity = -1;
-                    break;
-                default:
-                    break;
-            }
-        }, false );
         document.addEventListener( 'keyup', function (event) {
+            var req = new XMLHttpRequest();
             switch (event.keyCode) {
-                case 83: // S
-                    VBOT.robot.speed = 0;
-                    break;
-                case 87: // W
-                    VBOT.robot.speed = 0;
-                    break;
-                case 65: // A
-                    VBOT.robot.angularVelocity = 0;
-                    break;
-                case 68: // D
-                    VBOT.robot.angularVelocity = 0;
-                    break;
-                case 69: // E
-                    controller.test(VBOT);
+                case 13: // enter
+                    req.addEventListener('load', function () {
+                        console.log('loaded example');
+                        controller.start(VBOT, this.responseText);
+                    });
+                    req.open('GET', 'assets/js/sample_script.js', true);
+                    req.send();
             }
         }, false );
 

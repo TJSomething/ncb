@@ -297,24 +297,17 @@ function (THREE, utils) {
     }*/
 
     /**
-     * Starts up a test of the controller that loads a script from the server
-     * and executes it.
+     * Starts up the controller
      *
      * @memberof module:vbot/controller
      * @param {Object} vbotApp the virtual robot application state
+     * @param {string} script the controller script code
      * @return {Worker} The web worker executing the script
      */
-    function test(vbotApp) {
-        var sandbox = new Worker('assets/js/vbot_worker.js'),
-            exampleReq = new XMLHttpRequest();
+    function start(vbotApp, script) {
+        var sandbox = new Worker('assets/js/vbot_worker.js');
 
         init(vbotApp);
-
-        exampleReq.addEventListener('load', function () {
-            console.log('loaded example');
-            sandbox.postMessage( { script: this.responseText, start: true } );
-        });
-        exampleReq.open('GET', 'assets/js/sample_script.js', true);
 
         function start(e) {
             console.log(e.data);
@@ -324,8 +317,7 @@ function (THREE, utils) {
         }
 
         sandbox.addEventListener('message', start, false);
-
-        exampleReq.send();
+        sandbox.postMessage( { script: script, start: true });
 
         worker = sandbox;
 
@@ -742,7 +734,7 @@ function (THREE, utils) {
 
     return {
         init: init,
-        test: test,
+        start: start,
         step: step,
         get sensors() {return sensors;}
     };
