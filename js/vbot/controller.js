@@ -175,7 +175,7 @@ function (THREE, utils) {
      */
     function sense() {
         function calcCompass() {
-            var forward = new THREE.Vector4(1,0,0,0).applyMatrix4(robot.matrixWorld)));
+            var forward = new THREE.Vector4(1,0,0,0).applyMatrix4(robot.matrixWorld);
             var rad = Math.atan2(forward.x, forward.z);
             return rad/Math.PI * 180 + 180;
         }
