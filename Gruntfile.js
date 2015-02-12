@@ -6,107 +6,44 @@ module.exports = function(grunt) {
       options: {
         runBower: false
       },
-      'almond': {
+      common: {
         files: {
-          'tmp/vendorjs/almond.js': 'almond/almond.js'
-        }
-      },
-      'angular-strap': {
-        files: {
+          'tmp/vendorjs/almond.js': 'almond/almond.js',
           'tmp/vendorjs/angular-strap.js': 'angular-strap/dist/angular-strap.js',
           'tmp/vendorjs/angular-strap.tpl.js': 'angular-strap/dist/angular-strap.tpl.js',
-        }
-      },
-      'angular-ui-bootstrap-bower': {
-        files: {
-          'tmp/vendorjs/ui-bootstrap.js': 'angular-ui-bootstrap-bower/ui-bootstrap.js'
-        }
-      },
-      angular: {
-        files: {
-          'tmp/vendorjs/angular.js': 'angular/angular.js'
-        }
-      },
-      'angular-animate': {
-        files: {
-          'tmp/vendorjs/angular-animate.js': 'angular-animate/angular-animate.js'
-        }
-      },
-      'angular-motion': {
-        files: {
-          'tmp/css/angular-motion.css': 'angular-motion/dist/angular-motion.css'
-        }
-      },
-      esprima: {
-        files: {
-          'tmp/vendorjs/esprima.js': 'esprima/esprima.js'
-        }
-      },
-      restangular: {
-        files: {
-          'tmp/vendorjs/restangular.js': 'restangular/dist/restangular.js'
-        }
-      },
-      bootstrap: {
-        files: {
+          'tmp/vendorjs/ui-bootstrap.js': 'angular-ui-bootstrap-bower/ui-bootstrap.js',
+          'tmp/vendorjs/angular-animate.js': 'angular-animate/angular-animate.js',
+          'tmp/css/angular-motion.css': 'angular-motion/dist/angular-motion.css',
+          'tmp/vendorjs/esprima.js': 'esprima/esprima.js',
+          'tmp/vendorjs/restangular.js': 'restangular/dist/restangular.js',
           'tmp/vendorjs/bootstrap.js': 'bootstrap/dist/js/bootstrap.js',
           'tmp/css/bootstrap.css': 'bootstrap/dist/css/bootstrap.css',
-          'build/static/assets/fonts/': 'bootstrap/dist/fonts/*'
-        }
-      },
-      'bootstrap-additions': {
-        files: {
-          'tmp/css/bootstrap-additions.css': 'bootstrap-additions/dist/bootstrap-additions.css'
-        }
-      },
-      jquery: {
-        files: {
+          'build/static/assets/fonts/': 'bootstrap/dist/fonts/*',
+          'tmp/css/bootstrap-additions.css': 'bootstrap-additions/dist/bootstrap-additions.css',
           'tmp/vendorjs/jquery.js': 'jquery/dist/jquery.js',
-        }
-      },
-      underscore: {
-        files: {
-          'tmp/vendorjs/underscore.js': 'underscore/underscore.js'
-        }
-      },
-      requirejs: {
-        files: {
-          'tmp/vendorjs/require.js': 'requirejs/require.js'
-        }
-      },
-      jssha: {
-        files: {
-          'tmp/vendorjs/sha256.js': 'jssha/src/sha256.js'
-        }
-      },
-      snapjs: {
-        files: {
+          'tmp/vendorjs/underscore.js': 'underscore/underscore.js',
+          'tmp/vendorjs/require.js': 'requirejs/require.js',
+          'tmp/vendorjs/sha256.js': 'jssha/src/sha256.js',
           'tmp/vendorjs/snap.js': 'snapjs/snap.js',
-          'tmp/css/snap.css': 'snapjs/snap.css'
-        }
-      },
-      'angular-snap': {
-        files: {
+          'tmp/css/snap.css': 'snapjs/snap.css',
           'tmp/vendorjs/angular-snap.js': 'angular-snap/angular-snap.js',
-          'tmp/css/angular-snap.css': 'angular-snap/angular-snap.css'
-        }
-      },
-      'angular-bootstrap-colorpicker': {
-        files: {
+          'tmp/css/angular-snap.css': 'angular-snap/angular-snap.css',
           'tmp/vendorjs/bootstrap-colorpicker-module.js': 'angular-bootstrap-colorpicker/js/bootstrap-colorpicker-module.js',
-          'tmp/css/colorpicker.css': 'angular-bootstrap-colorpicker/css/colorpicker.css'
-        }
-      },
-      'angular-xeditable': {
-        files: {
+          'tmp/css/colorpicker.css': 'angular-bootstrap-colorpicker/css/colorpicker.css',
           'tmp/vendorjs/xeditable.js': 'angular-xeditable/dist/js/xeditable.js',
-          'tmp/css/xeditable.css': 'angular-xeditable/dist/css/xeditable.css'
-        }
-      },
-      'jquery-ui': {
-        files: {
+          'tmp/css/xeditable.css': 'angular-xeditable/dist/css/xeditable.css',
           'tmp/vendorjs/jquery-ui.js': 'jquery-ui/jquery-ui.js'
         }
+      },
+      dist: {
+          files: {
+              'tmp/vendorjs/angular.js': 'angular/angular.js',
+          }
+      },
+      debug: {
+          files: {
+              'tmp/vendorjs/angular.js': 'angular/angular.js',
+          }
       }
     },
     copy: {
@@ -124,10 +61,19 @@ module.exports = function(grunt) {
             dest: 'build'
           },
           {
+          	expand: true,
+          	flatten: true,
+          	src: ['tmp/templates/colorpicker-popover.html'],
+          	dest: 'build/static/assets/html'
+          },
+          {
             expand: true,
             flatten: true,
             src: 'tmp/ncbjs/compiled.min.js',
-            dest: 'build/static/assets/js/compiled.js'
+            dest: 'build/static/assets/js/',
+            rename: function (dest, src) {
+                return dest + src.replace(/\.min/, "");
+            }
           },
         ]
       },
@@ -147,7 +93,7 @@ module.exports = function(grunt) {
           {
             expand: true,
             flatten: true,
-            src: ['tmp/vendorjs/vendor.js'],
+            src: ['tmp/vendorjs/vendor.js*'],
             dest: 'build/static/assets/js'
           },
           {
@@ -231,7 +177,7 @@ module.exports = function(grunt) {
           collapseWhitespace: true
         },
         files: {
-          'build/static/index.html': 'tmp/index.html'
+          'build/index.html': 'tmp/index.html'
         }
       }
     },
@@ -329,9 +275,30 @@ module.exports = function(grunt) {
       }
     },
     uglify: {
+      options: {
+          sourceMap: true,
+          sourceMapIncludeSources: true
+      },
       vendorjs: {
         files: {
-          'build/static/assets/js/vendor.js': 'tmp/vendorjs/vendor.js'
+          'build/static/assets/js/vendor.js': [
+              'tmp/vendorjs/jquery.js',
+              'tmp/vendorjs/underscore.js',
+              'tmp/vendorjs/bootstrap.js',
+              'tmp/vendorjs/angular.js',
+              'tmp/vendorjs/restangular.js',
+              'tmp/vendorjs/angular-animate.js',
+              'tmp/vendorjs/angular-strap.js',
+              'tmp/vendorjs/angular-strap.tpl.js',
+              'tmp/vendorjs/ui-bootstrap.js',
+              'tmp/vendorjs/sha256.js',
+              'tmp/vendorjs/snap.js',
+              'tmp/vendorjs/angular-snap.js',
+              'tmp/vendorjs/bootstrap-colorpicker-module.js',
+              'tmp/vendorjs/xeditable.js',
+              'tmp/vendorjs/jquery-ui.js',
+              'tmp/vendorjs/almond.js'
+          ]
         }
       },
       ncbjs: {
@@ -388,7 +355,8 @@ module.exports = function(grunt) {
     'bake:build',
     'htmllint',
     'less',
-    'bowercopy',
+    'bowercopy:common',
+    'bowercopy:dist',
     'exec:buildVbotMotion',
     'bowerRequirejs',
     'requirejs:dist',
@@ -406,7 +374,8 @@ grunt.registerTask('build:debug', [
     'bake:build',
     'htmllint',
     'less',
-    'bowercopy',
+    'bowercopy:common',
+    'bowercopy:debug',
     'exec:buildVbotMotion',
     'bowerRequirejs',
     'requirejs:debug',
