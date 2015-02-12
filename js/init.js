@@ -14,13 +14,15 @@ $().ready( function() {
 
 // initialize main navigation
 $().ready( function() {
-    $('#mainNav a').click( function() {
+    $('#mainNav a').click( function(e) {
         var target;
         $('#mainNav li').removeClass('active');
         $(this).parent().addClass('active');
         hidePages();
         target = $(this).attr('href');
         $(target).show();
+        // Prevent scrolling past the navbar
+        e.preventDefault();
         //simBuilderUpdateTargets();
     });
 });
