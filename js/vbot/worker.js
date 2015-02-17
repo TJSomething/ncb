@@ -13,8 +13,11 @@
  * @var {module:vbot/controller~SenseData} sensors
  */
 
+var esprima = require('esprima/esprima');
+
 (function () {
     'use strict';
+
 
     var state = null;
     var runningActions = {};

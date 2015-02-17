@@ -1,3 +1,6 @@
+window.$ = window.jQuery = require('jquery');
+require('bootstrap');
+require('jquery-ui/jquery-ui');
 
 // initialize model page view
 $().ready( function() {
@@ -35,3 +38,11 @@ function hidePages() {
     $('#database').hide();
     $('#vbot').hide();
 }
+
+// Load the rest of the JS
+require('./json');
+require('./app.js');
+require('./model.services.js');
+require('./builder.controllers.js');
+require('./sim.controllers.js');
+require('./vbot/main.js');

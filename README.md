@@ -62,9 +62,11 @@ curl https://raw.githubusercontent.com/creationix/nvm/v0.7.0/install.sh | sh
 nvm install 0.10
 ~~~~
 
-Then tell it to use the latest Node version
+Add the following to the bottom of your ~/.bashrc file:
 
 ~~~~
+export NVM_DIR="$HOME/.nvm"
+source $HOME/.nvm/nvm.sh
 nvm use 0.10
 node --version
 ~~~~
@@ -77,39 +79,37 @@ Now that node is installed, we can install the node package dependencies.
 npm install
 ~~~~
 
-However, those are just the build dependencies. We need to use Bower to
-install the client dependencies.
+Install Bower, the frontend library manager:
 
 ~~~~
-bower install
+sudo npm install -g bower
 ~~~~
 
-Now that everything is installed, we can build the project.
+Update the Bower dependencies:
 
 ~~~~
-grunt build:debug
+bower update
 ~~~~
 
-Builds a version of NCB for debugging and working on the project.
+Install the gulp task manager:
 
 ~~~~
-grunt build:dist
+sudo npm install -g gulp-cli
 ~~~~
 
-Builds a production version of NCB for actual use.
-
-To start a debugging build, use Python to create a simple web server in the
-dist directory.
+When debugging, this we can use automatic rebuilding. For that run:
 
 ~~~~
-cd dist/
-python server.py
+gulp
 ~~~~
+
+This rebuilds the project automatically, while running the server, so
+changes show up more or less instantly.
 
 In production, use gunicorn
 
 ~~~~
-cd dist/
+cd build/
 gunicorn -w 4 server:app
 ~~~~
 
@@ -121,7 +121,7 @@ Running Tests
 To run Javascript tests
 
 ~~~~
-grunt mocha
+gulp mocha
 ~~~~
 
 To run Python tests on the backend

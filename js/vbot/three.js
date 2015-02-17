@@ -1,34 +1,37 @@
 // We're loading all of our three.js dependencies and then adding a few of
 // our own convenience methods.
-define( ['threejs', 'OrbitControls', 'ColladaLoader'], function (THREE) {
-    // Let's deal with the fact that we can't normally attach objects
-    //  to bones
-    THREE.Bone.prototype.update = (function () {
-      var update = THREE.Bone.prototype.update;
-      return function (parentSkinMatrix, forceUpdate) {
-          update.call(this, parentSkinMatrix, forceUpdate);
-          this.updateMatrixWorld( true );
-      };
-    }());
+var THREE = require('three.js/three');
 
-    THREE.Object3D.prototype.update = function() {};
+require('imports?THREE=three.js/three!threex-controls/controls/OrbitControls');
+require('imports?THREE=three.js/three!threex-colladaloader/ColladaLoader');
 
-    // World position is really nice to have
-    THREE.Object3D.prototype.positionWorld = function () {
-      return new THREE.Vector3().applyMatrix4(this.matrixWorld);
-    };
+// Let's deal with the fact that we can't normally attach objects
+//  to bones
+THREE.Bone.prototype.update = (function () {
+  var update = THREE.Bone.prototype.update;
+  return function (parentSkinMatrix, forceUpdate) {
+      update.call(this, parentSkinMatrix, forceUpdate);
+      this.updateMatrixWorld( true );
+  };
+}());
 
-    // Sometimes, we want the center more than the position
-    THREE.Object3D.prototype.centerWorld = function () {
-      var targetBox = new THREE.Box3().setFromObject(this),
-          center = new THREE.Vector3();
+THREE.Object3D.prototype.update = function() {};
 
-      // Find the center of the objects bounding box
-      center.addVectors(targetBox.min, targetBox.max);
-      center.multiplyScalar(0.5);
+// World position is really nice to have
+THREE.Object3D.prototype.positionWorld = function () {
+  return new THREE.Vector3().applyMatrix4(this.matrixWorld);
+};
 
-      return center;
-    };
+// Sometimes, we want the center more than the position
+THREE.Object3D.prototype.centerWorld = function () {
+  var targetBox = new THREE.Box3().setFromObject(this),
+      center = new THREE.Vector3();
 
-    return THREE;
-});
+  // Find the center of the objects bounding box
+  center.addVectors(targetBox.min, targetBox.max);
+  center.multiplyScalar(0.5);
+
+  return center;
+};
+
+module.exports = THREE;
