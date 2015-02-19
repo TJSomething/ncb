@@ -1,17 +1,25 @@
+var speed = 0;
+var w = 0;
 function main () {
     if (sensors.keys.W) {
-        setSpeed(1.7);
+        speed = 1.7;
     } else if (sensors.keys.S) {
-        setSpeed(-1.7);
+        speed = -1.7
     } else {
-        setSpeed(0);
+        speed = 0;
     }
     if (sensors.keys.A) {
-        startTurningLeft(1);
+        w = 1;
     } else if (sensors.keys.D) {
-        startTurningRight(1);
+        w = -1;
     } else {
-        startTurningLeft(0);
+        w = 0;
+    }
+    if (w !== sensors.angularVelocity) {
+        startTurningLeft(w);
+    }
+    if (speed !== sensors.speed) {
+        setSpeed(speed);
     }
 }
 
