@@ -82,7 +82,7 @@ function webpackConf(options) {
 }
 
 // Makes a task to build the JS with certain arguments to Webpack.
-function buildJsTask(entry, options) {
+function buildJsTask(options) {
     return function () {
         return gulp.src('.')
             .pipe(gulpWebpack(webpackConf(options), webpack))
