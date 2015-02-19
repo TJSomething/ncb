@@ -60,7 +60,7 @@ module.exports = function (app) {
                     '            </li>' +
                     '            <li>Actions:' +
                     '                <ul>' +
-                    '                    <li ng-repeat="action in actions">' +
+                    '                    <li ng-repeat="action in actions track by $index">' +
                     '                        {{action}}' +
                     '                    </li>' +
                     '                </ul>' +
