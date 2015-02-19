@@ -23,7 +23,7 @@ var buildPath = 'build/';
 var assetPath = buildPath + 'static/assets/';
 
 var paths = {
-    allJs: 'js/**.js',
+    allJs: ['js/*.js', 'js/vbot/*.js'],
     less: 'less/main.less',
     allLess: 'less/*.less',
     cssDest: assetPath + '/css/styles.css',
