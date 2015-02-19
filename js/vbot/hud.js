@@ -58,6 +58,13 @@ module.exports = function (app) {
                     '                    </li>' +
                     '                </ul>' +
                     '            </li>' +
+                    '            <li>Actions:' +
+                    '                <ul>' +
+                    '                    <li ng-repeat="action in actions">' +
+                    '                        {{action}}' +
+                    '                    </li>' +
+                    '                </ul>' +
+                    '            </li>' +
                     '        </ul>' +
                     '    </li>' +
                     '</ul>';
@@ -66,8 +73,8 @@ module.exports = function (app) {
             scope.$digest();
             hudElem.appendChild(result[0]);
             
-            module.update = function (newSensors) {
-                scope.sensors = newSensors;
+            module.update = function (key, value) {
+                scope[key] = value;
                 scope.$apply();
             }
 

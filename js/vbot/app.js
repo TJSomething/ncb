@@ -834,7 +834,8 @@ app.on('physics-tick', function (dt) {
     physics.detectCollisions();
     physics.resolveCollisions(dt);
     controller.step(dt);
-    app.hud.update(controller.sensors);
+    app.hud.update('sensors', controller.sensors);
+    app.hud.update('actions', controller.actions);
 });
 
 app.on('render', (function () {

@@ -736,5 +736,11 @@ module.exports = {
     init: init,
     start: start,
     step: step,
-    get sensors() {return sensors;}
+    get sensors() {return sensors;},
+    get actions() {
+        return actionQueue.map(
+            function (action) {
+                return action.action;
+            });
+        }
 };
