@@ -103,13 +103,16 @@ module.exports = function (app) {
                 }
             });
             // Toggle showing with click
-            hudElem.addEventListener('click', function (e) {
-                if (hidden) {
-                    show();
-                    hidden = false;
-                } else {
-                    hide();
-                    hidden = true;
+            hudElem.addEventListener('mousedown', function (e) {
+                // Don't toggle if something else is supposed to happen
+                if (!e.defaultPrevented) {
+                    if (hidden) {
+                        show();
+                        hidden = false;
+                    } else {
+                        hide();
+                        hidden = true;
+                    }
                 }
             });
 
