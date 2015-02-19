@@ -46,7 +46,7 @@ var paths = {
     fonts: 'node_modules/bootstrap/dist/fonts/*',
     tests: 'js/test/*.js',
     serverPy: ['ncb/server.py', 'ncb/db.py', 'ncb/__init__.py'],
-    otherAssets: ['images/**', 'icons/**'],
+    otherAssets: ['images/**', 'icons/**', '3d/**'],
     targets: {
         'ncb': './js/init.js',
         'vbot_worker': './js/vbot/worker.js'
