@@ -1,14 +1,14 @@
 /* jslint browser: true */
-/* global THREE, $:false, _:false, Stats, console, VBOT: true */
-
-'use strict';
 
 var THREE = require('./three');
 var numeric = require('numericjs/src/numeric');
 var collision = require('./collision');
+var boxIntersect = require('box-intersect');
 var _ = require('underscore');
 
 module.exports = (function () {
+    'use strict';
+
     var physicsObjects = [],
         // This is used to quickly address objects
         objectIndices = {},
@@ -61,6 +61,51 @@ module.exports = (function () {
         }
 
         return armBones;
+    }
+
+    /**
+     * Updates the sweep lists for a physics object.
+     */
+    function updateSweepList(physicsObj) {
+        var i;
+
+        physicsObj.aabbs = physicsObj.obbs.map(function (obb) {
+            var box = new THREE.Box3().setFromPoints(obb.calcVertices());
+            return [box.min.x, box.min.y, box.min.z,
+                    box.max.x, box.max.y, box.max.z];
+        });
+
+        /*
+            physicsObj.sweepLists = [];
+            for (i = 0; i < 3; i += 1) {
+                physicsObj.sweepLists.push({
+                    start: _.range(physicsObj.obbs.length),
+                    end: _.range(physicsObj.obb.length)
+                });
+            }
+
+            physicsObj.obbs.forEach(function (obb) {
+                obb.aabb = new THREE.Box3();
+            });
+        }
+
+        // Update the axis-aligned bounds for each OBB
+        physicsObj.obbs.forEach(function (obb) {
+            obb.aabb.fromPoints(obb.calcVertices());
+        });
+
+        // Update the sweep lists
+        for (i = 0; i < 3; i += 1) {
+            physicsObj.sweepLists[i].start.sort(function (a, b) {
+                return physicsObj.obbs[a].aabb.min.getComponent(i) <
+                       physicsObj.obbs[b].aabb.min.getComponent(i); 
+            });
+            physicsObj.sweepLists[i].end.sort(function (a, b) {
+                return physicsObj.obbs[a].aabb.max.getComponent(i) <
+                       physicsObj.obbs[b].aabb.max.getComponent(i); 
+            });
+        }
+        */
     }
 
     /**
@@ -121,9 +166,11 @@ module.exports = (function () {
         }
 
         obj.physics.boundingSphere = collision.calcBoundingSphereFromOBBs(obj.physics.obbs);
+        updateSweepList(obj.physics);
 
-        obj.physics.updateBoundingSphere = function () {
+        obj.physics.updateBoundingVolumes = function () {
             obj.physics.boundingSphere = collision.calcBoundingSphereFromOBBs(obj.physics.obbs);
+            updateSweepList(obj.physics);
         };
 
         obj.physics.verticalVelocity = obj.physics.verticalVelocity || 0;
@@ -149,9 +196,10 @@ module.exports = (function () {
         obj.physics.obbs = buildObjectOBBs(obj, staticCollisionResolution);
 
         obj.physics.boundingSphere = collision.calcBoundingSphereFromOBBs(obj.physics.obbs);
+        updateSweepList(obj.physics);
 
         // Static objects don't move, so they don't need updating
-        obj.physics.updateBoundingSphere = function () {};
+        obj.physics.updateBoundingVolumes = function () {};
 
         physicsObjects.push(obj);
         objectIndices[obj.geometry.id] = physicsObjects.length - 1;
@@ -172,8 +220,8 @@ module.exports = (function () {
     function updateGround(obj) {
         var objAABB = new THREE.Box3().setFromObject(obj.geometry);
 
-        if (groundElevation > objAABB.max.y) {
-            groundElevation = objAABB.max.y;
+        if (groundElevation > objAABB.min.y) {
+            groundElevation = objAABB.min.y;
         }
     }
 
@@ -272,7 +320,7 @@ module.exports = (function () {
         obj.physics.position = position;
         obj.physics.quaternion = quaternion;
 
-        obj.physics.updateBoundingSphere();
+        obj.physics.updateBoundingVolumes();
     }
 
     /**
@@ -344,207 +392,81 @@ module.exports = (function () {
             yScale = ymax - ymin,
             zScale = zmax - zmin;
 
-        /**
-         * Find all the faces that intersect the box.
-         *
-         * @param  {THREE.Box3} box
-         * @param  {Array.<Array.<THREE.Vector3>>} faces
-         * @return {Array.<Array.<THREE.Vector3>>} all the faces that intersect the box
-         */
-        function findIntersectingFaces(box, faces) {
-            return faces.filter(function (face) {
-                return collision.OBB.fromBox3(box).testTri(face);
-            });
-        }
+        function voxelize(box, faces) {
+            // Find dimensions of a voxel
+            var extent = box.max.clone().sub(box.min);
+            // For the voxel size
+            var vSize = new THREE.Vector3(extent.x, extent.y, extent.z);
+            var currentDim;
+            for (var currentAxis = 0; currentAxis < 3; currentAxis += 1) {
+                currentDim = vSize.getComponent(currentAxis);
+                while (currentDim > staticCollisionResolution) {
+                    currentDim /= 2;
+                }
+                vSize.setComponent(currentAxis, currentDim);
+            }
+            // A temporary voxel so we can do comparisons without allocation
+            var v = { 
+                c: new THREE.Vector3(0,0,0),
+                u: [new THREE.Vector3(1,0,0),
+                    new THREE.Vector3(0,1,0),
+                    new THREE.Vector3(0,0,1)],
+                e: vSize.clone().multiplyScalar(0.5)
+            };
 
-        /**
-         * Find all the faces that are entirely in the box.
-         *
-         * @param  {THREE.Box3} box
-         * @param  {Array.<Array.<THREE.Vector3>>} faces
-         * @return {Array.<Array.<THREE.Vector3>>} the faces that are entirely in the
-         *                             box
-         */
-        function findContainedFaces(box, faces) {
-            return faces.filter(function (face) {
-                return box.containsPoint(face[0]) &&
-                       box.containsPoint(face[1]) &&
-                       box.containsPoint(face[2]);
-            });
-        }
+            var faceBox = new THREE.Box3();
+            // Store the boxes in a sparse array as indices
+            var boxesByIndex = [];
+            var totalIndex;
+            var maxIndices = extent.clone().divide(vSize);
+            var i;
+            // For every face
+            for (i = 0; i < faces.length; i += 1) {
+                // Find the voxel bounds of this face
+                faceBox.setFromPoints(faces[i]);
+                faceBox.min.sub(box.min)
+                    .divide(vSize)
+                    .floor()
+                    .multiply(vSize)
+                    .add(box.min);
+                faceBox.max.sub(box.min)
+                    .divide(vSize)
+                    .ceil()
+                    .multiply(vSize)
+                    .add(box.min);
 
-        /**
-         * Combine all the combinable boxes along the given axis.
-         *
-         * Combinable boxes are those
-         * that are bordering each other on the border between the "left"
-         * side and the "right" side that have the same dimensions
-         * perpendicular to the axis. If any boxes could not be combined,
-         * those are included too.
-         *
-         * These boxes are combinable:
-         *
-         *     +--------------+-------------+
-         *     |              |             |
-         *     |     Left     |    Right    |
-         *     |              |             |
-         *     +--------------+-------------+
-         *
-         *                    |
-         *                    v
-         *
-         *     +----------------------------+
-         *     |                            |
-         *     |          Combined          |
-         *     |                            |
-         *     +----------------------------+
-         *
-         * These are not:
-         *
-         *     +--------------+-------------+
-         *     |              |             |
-         *     |     Left     |             |
-         *     |              |    Right    |
-         *     +--------------+             |
-         *                    |             |
-         *                    +-------------+
-         *
-         * @param  {THREE.Box3[]} leftBoxes
-         * @param  {THREE.Box3[]} rightBoxes
-         * @param  {number} axis  the index of the axis
-         * @return {THREE.Box3[]} the combined boxes
-         */
-        function mergeBoxes(leftBoxes, rightBoxes, axis) {
-            // We're going to combine the boxes across the given axis
-            // using a hashmap
-            var boxMap = Object.create(null),
-                boxes = [];
-
-            function addToMap(box) {
-                var nonAxisDimensions = [],
-                    i;
-
-                for (i = 0; i < 3; i += 1) {
-                    if (i !== axis) {
-                        nonAxisDimensions.push(box.min.getComponent(i));
-                        nonAxisDimensions.push(box.max.getComponent(i));
+                // Iterate through all the voxels that contain the face
+                totalIndex = 0;
+                for (v.c.x = faceBox.min.x + vSize.x/2; v.c.x < faceBox.max.x; v.c.x += vSize.x) {
+                    for (v.c.y = faceBox.min.y + vSize.y/2; v.c.y < faceBox.max.y; v.c.y += vSize.y) {
+                        for (v.c.z = faceBox.min.z + vSize.z/2; v.c.z < faceBox.max.z; v.c.z += vSize.z) {
+                            if (!boxesByIndex.hasOwnProperty(totalIndex) &&
+                                collision.OBB.prototype.testTri.call(v, faces[i])) {
+                                boxesByIndex[totalIndex] = true;
+                            }
+                            totalIndex += 1;
+                        }
                     }
                 }
-
-                // Convert to use as key
-                nonAxisDimensions = nonAxisDimensions.toString();
-
-                // Create entry if none exists
-                if (!boxMap[nonAxisDimensions]) {
-                    boxMap[nonAxisDimensions] = [box];
-                } else {
-                    // Otherwise, just add to the list of boxes with the
-                    // same dimensions
-                    boxMap[nonAxisDimensions].push(box);
-                }
             }
 
-            /**
-             * Finds the box that contains all of the given boxes.
-             *
-             * @param  {THREE.Box3[]} boxes
-             * @return {THREE.Box3}
-             */
-            function unionBoxes(boxes) {
-                return boxes.reduce(
-                    function (box1, box2) {
-                        return box1.union(box2);
-                    });
+            // Now, we can make the boxes
+            var boxes = [];
+            var boxIndices = Object.keys(boxesByIndex);
+            var boxMin = new THREE.Vector3();
+            for (i = 0; i < boxIndices.length; i += 1) {
+                boxMin.set(Math.floor(boxIndices[i]/maxIndices.y/maxIndices.z),
+                           Math.floor(boxIndices[i]/maxIndices.z) % maxIndices.y,
+                           boxIndices[i] % maxIndices.z)
+                    // I have no idea why we have to do this
+                    .multiplyScalar(-1)
+                    .sub(new THREE.Vector3(1,1,1))
+                    .multiply(vSize)
+                    .add(box.max);
+                boxes.push(new THREE.Box3(boxMin.clone(),
+                    boxMin.clone().add(vSize)));
             }
-
-            // Add them to the map
-            leftBoxes.forEach(addToMap);
-            rightBoxes.forEach(addToMap);
-
-            // Then, merge mergable boxes, if possible
-            for (var boxDimensions in boxMap) {
-                if (boxMap[boxDimensions].length === 1) {
-                    boxes.push(boxMap[boxDimensions][0]);
-                } else {
-                    boxes.push(unionBoxes(boxMap[boxDimensions]));
-                }
-            }
-
             return boxes;
-        }
-
-        /**
-         * Fits a box to the given faces and splits it in half along the
-         * longest axis, recursively, until the resulting boxes' dimensions
-         * are all less than the scale.
-         *
-         * @param  {THREE.Box3} box          The starting bounding box
-         * @param  {Array.<Array.<THREE.Vector3>>} faces
-         * @return {THREE.Box3[]}            All of the boxes that bound
-         *                                   the given faces.
-         */
-        function splitBox(box, faces) {
-            var extent,
-                faceBox,
-                splitAxis,
-                splitAxisLength = -Infinity,
-                currentAxis,
-                midpoint,
-                leftBox,
-                leftFaces,
-                rightBox,
-                rightFaces,
-                leftBoxes,
-                rightBoxes;
-
-            // Call it a day if there's nothing in the box
-            if (faces.length === 0) {
-                return [];
-            }
-
-            // Shrink the box to fit the faces better
-            faceBox = (new THREE.Box3()).setFromPoints(_.flatten(faces));
-            box = box.clone().intersect(faceBox);
-
-            // Calculate the extend of the box
-            extent = box.max.clone().sub(box.min);
-
-            // Find the largest axis to use as the splitting axis
-            for (currentAxis = 0; currentAxis < 3; currentAxis += 1) {
-                if (extent.getComponent(currentAxis) > splitAxisLength &&
-                    extent.getComponent(currentAxis) > scale) {
-                    splitAxis = currentAxis;
-                    splitAxisLength = extent.getComponent(currentAxis);
-                }
-            }
-
-            // If every dimension is smaller than the scale, save the
-            // box and terminate
-            if (splitAxis === undefined ||
-                (extent.x === 0 || extent.y === 0 || extent.z === 0)) {
-                return [box];
-            }
-
-            // Find the spatial median
-            midpoint = box.center().getComponent(splitAxis);
-
-            // Split the box at the midpoint
-            leftBox = new THREE.Box3(box.min.clone(),
-                box.max.clone());
-            leftBox.max.setComponent(splitAxis, midpoint);
-            rightBox = new THREE.Box3(box.min.clone(),
-                box.max.clone());
-            rightBox.min.setComponent(splitAxis, midpoint);
-
-            // Find the faces for each box
-            leftFaces = findIntersectingFaces(leftBox, faces);
-            rightFaces = findIntersectingFaces(rightBox, faces);
-
-            // Recurse into each box
-            leftBoxes = splitBox(leftBox, leftFaces);
-            rightBoxes = splitBox(rightBox, rightFaces);
-
-            return mergeBoxes(leftBoxes, rightBoxes, splitAxis);
         }
 
         // Let's only try subdividing if there's thickness. This test
@@ -553,14 +475,14 @@ module.exports = (function () {
             yScale !== 0 &&
             zScale !== 0) {
             // Build all candidate boxes recursively
-            boxes = splitBox(aabb, obj.physics.faces);
+            boxes = voxelize(aabb, obj.physics.faces);
         } else {
             boxes = [aabb];
         }
 
 
         // Help me with visualization
-        boxes.forEach(function (box) {
+        /*boxes.forEach(function (box) {
             var geom = new THREE.BoxGeometry(1, 1, 1),
                 mesh = new THREE.Mesh(geom,
                                       new THREE.MeshBasicMaterial({
@@ -568,13 +490,13 @@ module.exports = (function () {
                                           wireframe: true
                                       }));
 
-            mesh.position.set(box.center());
+            mesh.position.copy(box.center());
             mesh.scale.set(box.max.x - box.min.x,
                            box.max.y - box.min.y,
                            box.max.z - box.min.z);
 
             collisionVolumeObjects.add(mesh);
-        });
+        });*/
 
         // We'll convert those to OBBs
         return boxes.map(collision.OBB.fromBox3);
@@ -602,7 +524,7 @@ module.exports = (function () {
             var idxs = s.skinIndices[i].toArray(),
                 weights = s.skinWeights[i].toArray(),
                 maxWeight = -Infinity,
-                maxIndex = undefined;
+                maxIndex;
 
             for (j = 0; j < 4; j += 1) {
                 if (maxWeight !== undefined &&
@@ -703,6 +625,7 @@ module.exports = (function () {
             obbs1 = obj1.physics.obbs,
             obbs2 = obj2.physics.obbs,
             obb1, obb2,
+            pairs,
             sphere1 = obj1.physics.boundingSphere,
             sphere2 = obj2.physics.boundingSphere;
 
@@ -712,29 +635,31 @@ module.exports = (function () {
             if (!sphere1.intersectsSphere(sphere2)) {
                 return null;
             }
+            // Find all possibly interesecting pairs of boxes
+            pairs = boxIntersect(obj1.physics.aabbs, obj2.physics.aabbs);
 
-            for (i = 0; i < obbs1.length; i += 1) {
-                obb1 = obbs1[i].clone();
-                for (j = 0; j < obbs2.length; j += 1) {
-                    obb2 = obbs2[j].clone();
-                    collision = obb1.testOBB(obb2);
-                    if (collision) {
-                        if (collision.penetration !== Infinity) {
-                            collision.otherObject = obj2.geometry;
-                            collision.type = obj2.physics.type;
-                            // The robot bones are not the immediate children
-                            // of the robot, so we add a body part if we have that
-                            if (obb1.name &&
-                                obb1.name !== obj1.name) {
-                                collision.bodyPart = obb1.name;
-                            } else if (obb2.name &&
-                                       obb2.name !== obj2.name) {
-                                collision.bodyPart = obb2.name;
-                            }
+            // Test those pairs
+            for (i = 0; i < pairs.length; i += 1) {
+                obb1 = obbs1[pairs[i][0]].clone();
+                obb2 = obbs2[pairs[i][1]].clone();
 
-                            if (collision.penetration > bestCollision.penetration) {
-                                bestCollision = collision;
-                            }
+                collision = obb1.testOBB(obb2);
+                if (collision) {
+                    if (collision.penetration !== Infinity) {
+                        collision.otherObject = obj2.geometry;
+                        collision.type = obj2.physics.type;
+                        // The robot bones are not the immediate children
+                        // of the robot, so we add a body part if we have that
+                        if (obb1.name &&
+                            obb1.name !== obj1.name) {
+                            collision.bodyPart = obb1.name;
+                        } else if (obb2.name &&
+                                   obb2.name !== obj2.name) {
+                            collision.bodyPart = obb2.name;
+                        }
+
+                        if (collision.penetration > bestCollision.penetration) {
+                            bestCollision = collision;
                         }
                     }
                 }
