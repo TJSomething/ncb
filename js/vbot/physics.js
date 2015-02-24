@@ -1,7 +1,7 @@
 /* jslint browser: true */
 
 var THREE = require('./three');
-var numeric = require('numericjs/src/numeric');
+var numeric = require('numeric');
 var collision = require('./collision');
 var boxIntersect = require('box-intersect');
 var _ = require('underscore');
@@ -392,6 +392,10 @@ module.exports = (function () {
             yScale = ymax - ymin,
             zScale = zmax - zmin;
 
+        function addBoxToVisuals(box) {
+            collisionVolumeObjects.add(collision.OBBHelper(box));
+        }
+
         function voxelize(box, faces) {
             // Find dimensions of a voxel
             var extent = box.max.clone().sub(box.min);
@@ -405,66 +409,111 @@ module.exports = (function () {
                 }
                 vSize.setComponent(currentAxis, currentDim);
             }
-            // A temporary voxel so we can do comparisons without allocation
-            var v = { 
-                c: new THREE.Vector3(0,0,0),
-                u: [new THREE.Vector3(1,0,0),
-                    new THREE.Vector3(0,1,0),
-                    new THREE.Vector3(0,0,1)],
-                e: vSize.clone().multiplyScalar(0.5)
-            };
 
-            var faceBox = new THREE.Box3();
-            // Store the boxes in a sparse array as indices
-            var boxesByIndex = [];
+            var uvStep = [new THREE.Vector3(), new THREE.Vector3()];
+            var uv = [new THREE.Vector3(), new THREE.Vector3()];
+            // Indices for the grid on the face
+            var u, v;
+            var uVec = new THREE.Vector3(),
+                vVec = new THREE.Vector3();
+            var maxUvIndices = [0,0];
+            var i, j;
             var totalIndex;
-            var maxIndices = extent.clone().divide(vSize);
-            var i;
-            // For every face
-            for (i = 0; i < faces.length; i += 1) {
-                // Find the voxel bounds of this face
-                faceBox.setFromPoints(faces[i]);
-                faceBox.min.sub(box.min)
-                    .divide(vSize)
-                    .floor()
-                    .multiply(vSize)
-                    .add(box.min);
-                faceBox.max.sub(box.min)
-                    .divide(vSize)
-                    .ceil()
-                    .multiply(vSize)
-                    .add(box.min);
+            var voxelIndices = new THREE.Vector3();
+            var shape = extent.clone().divide(vSize);
+            var boxesByIndex = new Uint8Array(shape.x*shape.y*shape.z);
+            var minIndices = new THREE.Vector3();
 
-                // Iterate through all the voxels that contain the face
-                totalIndex = 0;
-                for (v.c.x = faceBox.min.x + vSize.x/2; v.c.x < faceBox.max.x; v.c.x += vSize.x) {
-                    for (v.c.y = faceBox.min.y + vSize.y/2; v.c.y < faceBox.max.y; v.c.y += vSize.y) {
-                        for (v.c.z = faceBox.min.z + vSize.z/2; v.c.z < faceBox.max.z; v.c.z += vSize.z) {
-                            if (!boxesByIndex.hasOwnProperty(totalIndex) &&
-                                collision.OBB.prototype.testTri.call(v, faces[i])) {
-                                boxesByIndex[totalIndex] = true;
-                            }
-                            totalIndex += 1;
-                        }
+            /* The idea behind this algorithm is that we divide the face
+               into smaller triangles, such that the subface vertices are
+               close enough that one is in every voxel that penetrates
+               the face. This is inspired by Fei et al.'s paper on 
+               Point-Tesselated Voxelization. However, while they
+               use the triangle centroids to generate voxels, I use the vertices.
+               Furthermore, instead of scaling all of the sides of every
+               triangle, I only scale two of the sides. */
+            for (i = 0; i < faces.length; i += 1) {
+                // Calculate two of the sides of the face
+                uvStep[0].copy(faces[i][1])
+                    .sub(faces[i][0]);
+                uvStep[1].copy(faces[i][2])
+                    .sub(faces[i][0]);
+                // Create vectors that we can walk across the face with
+                // steps that are smaller than a voxel.
+                for (j = 0; j < 2; j += 1) {
+                    maxUvIndices[j] = 1;
+                    while (Math.abs(uvStep[j].x) > vSize.x ||
+                           Math.abs(uvStep[j].y) > vSize.y ||
+                           Math.abs(uvStep[j].z) > vSize.z) {
+                        uvStep[j].divideScalar(2);
+                        maxUvIndices[j] *= 2;
                     }
                 }
-            }
 
+                // Walk over a grid on the triangle
+                uVec.copy(faces[i][0]);
+                for (u = 0; u < maxUvIndices[0]; u += 1) {
+                    vVec.set(0,0,0);
+                    for (v = 0; u + v < maxUvIndices[1]; v += 1) {
+                        voxelIndices.addVectors(uVec, vVec)
+                            .sub(box.min)
+                            .divide(vSize);
+
+                        // Compensate for floating point errors
+                        if (Math.abs(voxelIndices.x - shape.x) < 0.00001) {
+                            voxelIndices.x = shape.x - 1;
+                        }
+                        if (Math.abs(voxelIndices.y - shape.y) < 0.00001) {
+                            voxelIndices.y = shape.y - 1;
+                        }
+                        if (Math.abs(voxelIndices.z - shape.z) < 0.00001) {
+                            voxelIndices.z = shape.z - 1;
+                        }
+
+                        voxelIndices.floor();
+
+                        if (voxelIndices.x < shape.x &&
+                            voxelIndices.y < shape.y &&
+                            voxelIndices.z < shape.z) {
+                            totalIndex = voxelIndices.x * shape.y * shape.z +
+                                         voxelIndices.y * shape.z +
+                                         voxelIndices.z;
+                            boxesByIndex[totalIndex] = 1;
+                        }
+                        vVec.add(uvStep[1]);
+                    }
+                    uVec.add(uvStep[0]);
+                }
+            }
+            
             // Now, we can make the boxes
             var boxes = [];
-            var boxIndices = Object.keys(boxesByIndex);
-            var boxMin = new THREE.Vector3();
-            for (i = 0; i < boxIndices.length; i += 1) {
-                boxMin.set(Math.floor(boxIndices[i]/maxIndices.y/maxIndices.z),
-                           Math.floor(boxIndices[i]/maxIndices.z) % maxIndices.y,
-                           boxIndices[i] % maxIndices.z)
-                    // I have no idea why we have to do this
-                    .multiplyScalar(-1)
-                    .sub(new THREE.Vector3(1,1,1))
-                    .multiply(vSize)
-                    .add(box.max);
-                boxes.push(new THREE.Box3(boxMin.clone(),
-                    boxMin.clone().add(vSize)));
+            var tempBox = new THREE.Box3();
+            var boxLength;
+
+            var start = Date.now();
+            for (i = 0; i < boxesByIndex.length; i += 1) {
+                if (boxesByIndex[i] === 1) {
+                    tempBox.min.set(Math.floor(i/shape.y/shape.z),
+                                    Math.floor(i/shape.z) % shape.y,
+                                    i % shape.z)
+                        .multiply(vSize)
+                        .add(box.min);
+
+                    // Combine boxes in the same row
+                    while (boxesByIndex[i+1] === 1 &&
+                           (i+1) % shape.z !== 0 ) {
+                        i += 1;
+                    }
+
+                    tempBox.max.set(Math.floor(i/shape.y/shape.z) + 1,
+                                    Math.floor(i/shape.z) % shape.y + 1,
+                                    i % shape.z + 1)
+                        .multiply(vSize)
+                        .add(box.min);
+
+                    boxes.push(collision.OBB.fromBox3(tempBox));
+                }
             }
             return boxes;
         }
@@ -477,29 +526,12 @@ module.exports = (function () {
             // Build all candidate boxes recursively
             boxes = voxelize(aabb, obj.physics.faces);
         } else {
-            boxes = [aabb];
+            boxes = [collision.OBB.fromBox3(aabb)];
         }
 
+        boxes.forEach(addBoxToVisuals);
 
-        // Help me with visualization
-        /*boxes.forEach(function (box) {
-            var geom = new THREE.BoxGeometry(1, 1, 1),
-                mesh = new THREE.Mesh(geom,
-                                      new THREE.MeshBasicMaterial({
-                                          color: 0x888888,
-                                          wireframe: true
-                                      }));
-
-            mesh.position.copy(box.center());
-            mesh.scale.set(box.max.x - box.min.x,
-                           box.max.y - box.min.y,
-                           box.max.z - box.min.z);
-
-            collisionVolumeObjects.add(mesh);
-        });*/
-
-        // We'll convert those to OBBs
-        return boxes.map(collision.OBB.fromBox3);
+        return boxes;
     }
 
     /**

@@ -5,6 +5,7 @@
 var $ = require('jquery');
 var VBOT = require('./app');
 var controller = require('./controller');
+var physics = require('./physics');
 
 var startedLoading = false;
 
@@ -45,6 +46,10 @@ VBOT.on('scene-loaded', function () {
                 });
                 req.open('GET', 'assets/js/sample_script.js', true);
                 req.send();
+                break;
+            case 80:
+                physics.toggleCollisionVolumes(VBOT.scene);
+                break;
         }
     }, false );
 

@@ -10,7 +10,6 @@
     "esprima": "~1.2.2",
     "jszip": "~2.0.0",
     "threejs-stats": "*",
-    "numericjs": "~1.2.6",
     "jquery-ui": "~1.11.2"
   },
   "devDependencies": {

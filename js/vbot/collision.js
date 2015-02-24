@@ -1,6 +1,8 @@
+/*jshint browserify: true*/
+
 'use strict';
 var THREE = require('./three');
-var numeric = require('numericjs/src/numeric');
+var numeric = require('numeric');
 var _ = require('underscore');
 
 var EPSILON = 0.000001;
@@ -238,15 +240,15 @@ collision.OBB.prototype = {
     calcVertices: function () {
         var obb = this,
             mat = obb.makeMatrix(),
-            Vec = function (x,y,z) { return new THREE.Vector3(x,y,z); },
-            startVertices = [Vec(-1, -1, -1),
-                Vec(-1, -1, +1),
-                Vec(-1, +1, -1),
-                Vec(-1, +1, +1),
-                Vec(+1, -1, -1),
-                Vec(+1, -1, +1),
-                Vec(+1, +1, -1),
-                Vec(+1, +1, +1)];
+            vec = function (x,y,z) { return new THREE.Vector3(x,y,z); },
+            startVertices = [vec(-1, -1, -1),
+                vec(-1, -1, +1),
+                vec(-1, +1, -1),
+                vec(-1, +1, +1),
+                vec(+1, -1, -1),
+                vec(+1, -1, +1),
+                vec(+1, +1, -1),
+                vec(+1, +1, +1)];
         return startVertices.map(function(vert) {
             return vert.applyMatrix4(mat);
         });
