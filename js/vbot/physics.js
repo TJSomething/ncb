@@ -529,7 +529,8 @@ module.exports = (function () {
             boxes = [collision.OBB.fromBox3(aabb)];
         }
 
-        boxes.forEach(addBoxToVisuals);
+        // This is actually rather time-consuming, but it's good for debugging.
+        //boxes.forEach(addBoxToVisuals);
 
         return boxes;
     }
