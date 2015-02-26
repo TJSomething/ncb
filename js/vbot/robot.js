@@ -929,12 +929,16 @@ var Robot = (function () {
         // Clear the dummy geometry used to stand in for
         //  the robot
         obj.geometry = new THREE.Geometry();
+        // And all the child geometries
+        obj.traverse(function (child) {
+            child.geometry = new THREE.Geometry();
+        });
 
         // We're going to make a new object that isn't subject to the scaling
         //  in the scene and won't kill accidental children
         var robot = new THREE.Object3D();
         robot.position.copy(obj.positionWorld());
-        robot.quaternion.copy(obj.quaternion);
+        robot.quaternion.copy(obj.getWorldQuaternion());
         robot.name = 'Robot Parent';
         // We need a reference to the VBOT module to avoid a circular
         // dependency

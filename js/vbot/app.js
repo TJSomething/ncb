@@ -421,7 +421,8 @@ function readyScene(character) {
 
             if (!app.camera) {
                 camera = new THREE.PerspectiveCamera( 45, app.size.aspect, 0.1, 1000 );
-                camera.position.set(5, 5, 5);
+                camera.position.copy(app.robot.positionWorld())
+                    .addScalar(5);
                 camera.lookAt(app.robot.position);
                 // This counters the hack used for Collada cameras
                 camera.rotateX(Math.PI/2);
@@ -471,6 +472,7 @@ function readyScene(character) {
             app.camera.rotateX(-Math.PI/2);
 
             app.controls = new THREE.OrbitControls(app.camera);
+            app.controls.target = app.robot.positionWorld();
         }
     }
 
