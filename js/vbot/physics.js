@@ -419,10 +419,22 @@ module.exports = (function () {
             var maxUvIndices = [0,0];
             var i, j;
             var totalIndex;
-            var voxelIndices = new THREE.Vector3();
+            var voxIdx = new THREE.Vector3();
             var shape = extent.clone().divide(vSize);
             var boxesByIndex = new Uint8Array(shape.x*shape.y*shape.z);
             var minIndices = new THREE.Vector3();
+
+            // Functions to make it easier to calculate indices to coordinates
+            function vectorToIndex(x,y,z) {
+                return x * shape.y * shape.z +
+                       y * shape.z +
+                       z;
+            }
+            function setVectorFromIndex(v, i) {
+                v.set(Math.floor(i/shape.y/shape.z),
+                      Math.floor(i/shape.z) % shape.y,
+                      i % shape.z);
+            }
 
             /* The idea behind this algorithm is that we divide the face
                into smaller triangles, such that the subface vertices are
@@ -455,29 +467,27 @@ module.exports = (function () {
                 for (u = 0; u < maxUvIndices[0]; u += 1) {
                     vVec.set(0,0,0);
                     for (v = 0; u + v < maxUvIndices[1]; v += 1) {
-                        voxelIndices.addVectors(uVec, vVec)
+                        voxIdx.addVectors(uVec, vVec)
                             .sub(box.min)
                             .divide(vSize);
 
                         // Compensate for floating point errors
-                        if (Math.abs(voxelIndices.x - shape.x) < 0.00001) {
-                            voxelIndices.x = shape.x - 1;
+                        if (Math.abs(voxIdx.x - shape.x) < 0.00001) {
+                            voxIdx.x = shape.x - 1;
                         }
-                        if (Math.abs(voxelIndices.y - shape.y) < 0.00001) {
-                            voxelIndices.y = shape.y - 1;
+                        if (Math.abs(voxIdx.y - shape.y) < 0.00001) {
+                            voxIdx.y = shape.y - 1;
                         }
-                        if (Math.abs(voxelIndices.z - shape.z) < 0.00001) {
-                            voxelIndices.z = shape.z - 1;
+                        if (Math.abs(voxIdx.z - shape.z) < 0.00001) {
+                            voxIdx.z = shape.z - 1;
                         }
 
-                        voxelIndices.floor();
+                        voxIdx.floor();
 
-                        if (voxelIndices.x < shape.x &&
-                            voxelIndices.y < shape.y &&
-                            voxelIndices.z < shape.z) {
-                            totalIndex = voxelIndices.x * shape.y * shape.z +
-                                         voxelIndices.y * shape.z +
-                                         voxelIndices.z;
+                        if (voxIdx.x < shape.x &&
+                            voxIdx.y < shape.y &&
+                            voxIdx.z < shape.z) {
+                            totalIndex = vectorToIndex(voxIdx.x, voxIdx.y, voxIdx.z);
                             boxesByIndex[totalIndex] = 1;
                         }
                         vVec.add(uvStep[1]);
@@ -490,27 +500,70 @@ module.exports = (function () {
             var boxes = [];
             var tempBox = new THREE.Box3();
             var boxLength;
+            var x,y,z;
 
             var start = Date.now();
             for (i = 0; i < boxesByIndex.length; i += 1) {
                 if (boxesByIndex[i] === 1) {
-                    tempBox.min.set(Math.floor(i/shape.y/shape.z),
-                                    Math.floor(i/shape.z) % shape.y,
-                                    i % shape.z)
-                        .multiply(vSize)
-                        .add(box.min);
+                    setVectorFromIndex(tempBox.min, i);
+                    x = tempBox.min.x;
+                    y = tempBox.min.y;
+                    z = tempBox.min.z;
 
                     // Combine boxes in the same row
-                    while (boxesByIndex[i+1] === 1 &&
-                           (i+1) % shape.z !== 0 ) {
-                        i += 1;
+                    while (boxesByIndex[vectorToIndex(x,y,z)] === 1 &&
+                           z < shape.z) {
+                        z += 1;
+                    }
+                    tempBox.max.z = z;
+
+                    // Repeat a dimension up
+                    yLoop:
+                    while (y < shape.y) {
+                        for (z = tempBox.min.z; z < tempBox.max.z; z += 1) {
+                            if (boxesByIndex[vectorToIndex(x,y,z)] !== 1) {
+                                break yLoop;
+                            }
+                        }
+                        y += 1;
+                    }
+                    tempBox.max.y = y;
+
+                    // More dimensions!
+                    xLoop:
+                    while (x < shape.x) {
+                        for (y = tempBox.min.y; y < tempBox.max.y; y += 1) {
+                            for (z = tempBox.min.z; z < tempBox.max.z; z += 1) {
+                                if (boxesByIndex[vectorToIndex(x,y,z)] !== 1) {
+                                    break xLoop;
+                                }
+                            }
+                        }
+                        x += 1;
+                    }
+                    tempBox.max.x = x;
+
+                    // Mark all the voxels in the box as empty, so they don't
+                    // get covered in later passes
+                    for (x = tempBox.min.x; x < tempBox.max.x; x += 1) {
+                        for (y = tempBox.min.y; y < tempBox.max.y; y += 1) {
+                            for (z = tempBox.min.z; z < tempBox.max.z; z += 1) {
+                                boxesByIndex[vectorToIndex(x,y,z)] = 0;
+                            }
+                        }
                     }
 
-                    tempBox.max.set(Math.floor(i/shape.y/shape.z) + 1,
-                                    Math.floor(i/shape.z) % shape.y + 1,
-                                    i % shape.z + 1)
+                    if (tempBox.max.y > shape.y) {
+                        throw 'wtf';
+                    }
+                    // Scale back into scene space
+                    tempBox.min
                         .multiply(vSize)
                         .add(box.min);
+                    tempBox.max
+                        .multiply(vSize)
+                        .add(box.min);
+
 
                     boxes.push(collision.OBB.fromBox3(tempBox));
                 }
@@ -530,7 +583,7 @@ module.exports = (function () {
         }
 
         // This is actually rather time-consuming, but it's good for debugging.
-        //boxes.forEach(addBoxToVisuals);
+        boxes.forEach(addBoxToVisuals);
 
         return boxes;
     }
