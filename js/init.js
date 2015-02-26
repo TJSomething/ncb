@@ -1,6 +1,5 @@
 window.$ = window.jQuery = require('jquery');
-require('bootstrap');
-require('jquery-ui/jquery-ui');
+require('jquery-ui');
 
 // initialize model page view
 $().ready( function() {
