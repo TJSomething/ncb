@@ -423,6 +423,7 @@ module.exports = (function () {
             var shape = extent.clone().divide(vSize);
             var boxesByIndex = new Uint8Array(shape.x*shape.y*shape.z);
             var minIndices = new THREE.Vector3();
+            var uScale;
 
             // Functions to make it easier to calculate indices to coordinates
             function vectorToIndex(x,y,z) {
@@ -461,12 +462,24 @@ module.exports = (function () {
                         maxUvIndices[j] *= 2;
                     }
                 }
+                // In uv-space, we have a grid with an origin at the first
+                // vertex of the face. The triangle that we're iterating over
+                // is a right triangle with a right angle at that first vertex.
+                // So, the hypotenuse of that triangle is the opposite edge of
+                // the triangle. This hypotenuse is specified by the a line
+                //          v = -vMax/uMax * u + vMax
+                // which is equivalent to
+                //          vMax/uMax * u + v = vMax
+                // and everything under that line is
+                //          vMax/uMax * u + v < vMax
+                // hence, then conditional on the second for loop.
+                uScale = maxUvIndices[1]/maxUvIndices[0];
 
                 // Walk over a grid on the triangle
                 uVec.copy(faces[i][0]);
                 for (u = 0; u < maxUvIndices[0]; u += 1) {
                     vVec.set(0,0,0);
-                    for (v = 0; u + v < maxUvIndices[1]; v += 1) {
+                    for (v = 0; uScale*u + v < maxUvIndices[1]; v += 1) {
                         voxIdx.addVectors(uVec, vVec)
                             .sub(box.min)
                             .divide(vSize);
@@ -486,7 +499,10 @@ module.exports = (function () {
 
                         if (voxIdx.x < shape.x &&
                             voxIdx.y < shape.y &&
-                            voxIdx.z < shape.z) {
+                            voxIdx.z < shape.z &&
+                            voxIdx.x >= 0 &&
+                            voxIdx.y >= 0 &&
+                            voxIdx.z >= 0) {
                             totalIndex = vectorToIndex(voxIdx.x, voxIdx.y, voxIdx.z);
                             boxesByIndex[totalIndex] = 1;
                         }
@@ -553,9 +569,6 @@ module.exports = (function () {
                         }
                     }
 
-                    if (tempBox.max.y > shape.y) {
-                        throw 'wtf';
-                    }
                     // Scale back into scene space
                     tempBox.min
                         .multiply(vSize)
@@ -583,7 +596,7 @@ module.exports = (function () {
         }
 
         // This is actually rather time-consuming, but it's good for debugging.
-        boxes.forEach(addBoxToVisuals);
+        //boxes.forEach(addBoxToVisuals);
 
         return boxes;
     }
