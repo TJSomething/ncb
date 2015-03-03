@@ -5,8 +5,8 @@ var numeric = require('numeric');
 var collision = require('./collision');
 var boxIntersect = require('box-intersect');
 var _ = require('underscore');
-var SHA = require('jssha');
 var LZString = require('lz-string');
+var MurmurHash3 = require('murmurhash3js');
 
 module.exports = (function () {
     'use strict';
@@ -619,9 +619,8 @@ module.exports = (function () {
 
         function cacheBoxes(faces) {
             // We add a prefix so we can version this
-            var hash = 'box4:' +
-                new SHA(JSON.stringify(faces), 'TEXT')
-                    .getHash('SHA-512', 'HEX');
+            var hash = 'box6:' +
+                MurmurHash3.x64.hash128(JSON.stringify(faces));
             var value;
             // Check if the faces are cached
             value = window.localStorage.getItem(hash);
