@@ -621,17 +621,33 @@ module.exports = (function () {
             // We add a prefix so we can version this
             var hash = 'box6:' +
                 MurmurHash3.x64.hash128(JSON.stringify(faces));
-            var value;
+            var boxes;
+            var serialized;
             // Check if the faces are cached
-            value = window.localStorage.getItem(hash);
-            if (!value) {
-                value = voxelize(faces);
-                window.localStorage.setItem(hash, serializeBoxes(value));
+            boxes = window.localStorage.getItem(hash);
+            if (!boxes) {
+                // Process faces
+                boxes = voxelize(faces);
+                // Compress
+                serialized = serializeBoxes(boxes);
+                try {
+                    window.localStorage.setItem(hash, serialized);
+                } catch (e) {
+                    window.localStorage.clear();
+                    console.log('Caching failed on object ' + obj.geometry.id);
+                    console.log('Clearing cache and trying again...');
+                    try {
+                        window.localStorage.setItem(hash, serialized);
+                    } catch (e) {
+                        console.log('Caching failed on object ' + obj.geometry.id +
+                            ' of size ' + serialized.length + ' characters');
+                    }
+                }
             } else {
-                value = unserializeBoxes(value);
+                boxes = unserializeBoxes(boxes);
             }
 
-            return value;
+            return boxes;
         }
 
         // Let's only try subdividing if there's thickness. This test
