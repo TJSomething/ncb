@@ -448,7 +448,12 @@ function readyScene(character) {
 
      */
     function runTasks() {
-        taskQueue.shift().call();
+        // If a frame hasn't passed yet, do the next thing
+        var start = Date.now();
+        do {
+            taskQueue.shift().call();
+        } while (taskQueue.length !== 0 && Date.now() - start < 30);
+
         if (taskQueue.length > 0) {
             setTimeout(runTasks, 0);
         }

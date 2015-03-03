@@ -5,6 +5,8 @@ var numeric = require('numeric');
 var collision = require('./collision');
 var boxIntersect = require('box-intersect');
 var _ = require('underscore');
+var SHA = require('jssha');
+var LZString = require('lz-string');
 
 module.exports = (function () {
     'use strict';
@@ -358,6 +360,7 @@ module.exports = (function () {
         }
     }
 
+    var total = 0;
     /**
      * Makes an array of OBBs that, together, bound a CombinedPhysicsObject.
      *
@@ -379,14 +382,14 @@ module.exports = (function () {
      */
     function buildObjectOBBs(obj, scale) {
         // Calculate bounding box
-        var aabb = (new THREE.Box3()).setFromObject(obj.geometry),
+        var box = (new THREE.Box3()).setFromObject(obj.geometry),
             // Actual bounds
-            xmax = aabb.max.x,
-            xmin = aabb.min.x,
-            ymax = aabb.max.y,
-            ymin = aabb.min.y,
-            zmax = aabb.max.z,
-            zmin = aabb.min.z,
+            xmax = box.max.x,
+            xmin = box.min.x,
+            ymax = box.max.y,
+            ymin = box.min.y,
+            zmax = box.max.z,
+            zmin = box.min.z,
             boxes = [],
             xScale = xmax - xmin,
             yScale = ymax - ymin,
@@ -396,7 +399,7 @@ module.exports = (function () {
             collisionVolumeObjects.add(collision.OBBHelper(box));
         }
 
-        function voxelize(box, faces) {
+        function voxelize(faces) {
             // Find dimensions of a voxel
             var extent = box.max.clone().sub(box.min);
             // For the voxel size
@@ -518,7 +521,6 @@ module.exports = (function () {
             var boxLength;
             var x,y,z;
 
-            var start = Date.now();
             for (i = 0; i < boxesByIndex.length; i += 1) {
                 if (boxesByIndex[i] === 1) {
                     setVectorFromIndex(tempBox.min, i);
@@ -577,11 +579,60 @@ module.exports = (function () {
                         .multiply(vSize)
                         .add(box.min);
 
-
-                    boxes.push(collision.OBB.fromBox3(tempBox));
+                    boxes.push(tempBox.clone());
                 }
             }
             return boxes;
+        }
+
+        function serializeBoxes(boxes) {
+            var buffer = new Array(boxes.length * 6);
+            var i;
+            for (i = 0; i < boxes.length; i += 1) {
+                buffer[i*6 + 0] = boxes[i].min.x;
+                buffer[i*6 + 1] = boxes[i].min.y;
+                buffer[i*6 + 2] = boxes[i].min.z;
+                buffer[i*6 + 3] = boxes[i].max.x;
+                buffer[i*6 + 4] = boxes[i].max.y;
+                buffer[i*6 + 5] = boxes[i].max.z;
+            }
+            return LZString.compressToUTF16(JSON.stringify(buffer));
+        }
+
+        function unserializeBoxes(compressed) {
+            var uncompressed = JSON.parse(
+                    LZString.decompressFromUTF16(compressed));
+            var result = new Array(uncompressed.length / 6);
+            var i;
+            var tempBox = new THREE.Box3();
+            for (i = 0; i < uncompressed.length / 6; i += 1) {
+                tempBox.min.x = uncompressed[i*6 + 0];
+                tempBox.min.y = uncompressed[i*6 + 1];
+                tempBox.min.z = uncompressed[i*6 + 2];
+                tempBox.max.x = uncompressed[i*6 + 3];
+                tempBox.max.y = uncompressed[i*6 + 4];
+                tempBox.max.z = uncompressed[i*6 + 5];
+                result[i] = tempBox.clone();
+            }
+            return result;
+        }
+
+        function cacheBoxes(faces) {
+            // We add a prefix so we can version this
+            var hash = 'box4:' +
+                new SHA(JSON.stringify(faces), 'TEXT')
+                    .getHash('SHA-512', 'HEX');
+            var value;
+            // Check if the faces are cached
+            value = window.localStorage.getItem(hash);
+            if (!value) {
+                value = voxelize(faces);
+                window.localStorage.setItem(hash, serializeBoxes(value));
+            } else {
+                value = unserializeBoxes(value);
+            }
+
+            return value;
         }
 
         // Let's only try subdividing if there's thickness. This test
@@ -590,10 +641,12 @@ module.exports = (function () {
             yScale !== 0 &&
             zScale !== 0) {
             // Build all candidate boxes recursively
-            boxes = voxelize(aabb, obj.physics.faces);
+            boxes = cacheBoxes(obj.physics.faces);
         } else {
-            boxes = [collision.OBB.fromBox3(aabb)];
+            boxes = [box];
         }
+
+        boxes = boxes.map(collision.OBB.fromBox3);
 
         // This is actually rather time-consuming, but it's good for debugging.
         //boxes.forEach(addBoxToVisuals);
