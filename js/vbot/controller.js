@@ -473,6 +473,55 @@ function stepAction(action, dt) {
             app.robot.angularVelocity = action.speed;
             actionsCompleted.push(action.id);
             break;
+        case 'goForward':
+            // If it need to be done in a certain amount of time,
+            // then convert the time into a speed
+            if (action.hasOwnProperty('time') &&
+                !action.hasOwnProperty('speed')) {
+                action.speed = action.distance / action.time;
+            }
+            // Initialize state and start moving if we aren't yet.
+            if (!action.hasOwnProperty('targetOdometer')) {
+                action.targetOdometer = robot.odometer + action.distance;
+                app.robot.speed = Math.sign(action.distance) * action.speed;
+            }
+
+            // If we've moved far enough, stop, and back up if we overshot
+            if (Math.sign(action.targetOdometer - robot.odometer) !==
+                Math.sign(action.distance)) {
+                app.robot.speed = 0;
+                app.robot.instantBackward(
+                    robot.odometer - action.targetOdometer);
+                actionsCompleted.push(action.id);
+            }
+            break;
+        case 'turnRight':
+            // Initialize action state
+            if (!action.hasOwnProperty('radiansLeft')) {
+                action.radiansLeft = Math.abs(action.degrees) / 180 * Math.PI;
+
+                // If it need to be done in a certain amount of time,
+                // then convert the time into a speed
+                if (action.hasOwnProperty('time')) {
+                    action.speed = action.degrees / action.time;
+                }
+            }
+            stepAmount = Math.sign(action.degrees) * action.speed * dt;
+
+            // Make sure we don't overshoot
+            if (Math.sign(action.radiansLeft - Math.abs(stepAmount)) !==
+                Math.sign(action.radiansLeft)) {
+                stepAmount = action.radiansLeft;
+            }
+            // Turn
+            app.robot.instantRight(stepAmount);
+
+            action.radiansLeft -= Math.abs(stepAmount);
+
+            if (action.radiansLeft <= 0) {
+                actionsCompleted.push(action.id);
+            }
+            break;
         case 'pointArmAt':
             target = app.scene.getObjectByName(action.objName, true);
             targetLoc = target.centerWorld();

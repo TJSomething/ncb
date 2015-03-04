@@ -6,6 +6,7 @@
     "angular-snap": "~1.6.0",
     "angular-bootstrap-colorpicker": "~3.0.8",
     "snapjs": "~1.9.3",
+    "angular-xeditable": "*",
     "threejs": "r70",
     "esprima": "~1.2.2",
     "jszip": "~2.0.0",

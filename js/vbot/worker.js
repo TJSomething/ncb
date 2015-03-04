@@ -14,6 +14,7 @@
  */
 
 var esprima = require('esprima/esprima');
+var _ = require('underscore');
 
 (function () {
     'use strict';
@@ -277,8 +278,8 @@ var esprima = require('esprima/esprima');
      * @return {scripting~ExtendedAction} the action of turning left
      */
     function turnLeft(degrees) {
-        return new ExtendedAction('turnLeft', {
-            degrees: degrees
+        return new ExtendedAction('turnRight', {
+            degrees: -degrees
         });
     }
 
