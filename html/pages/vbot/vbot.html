@@ -8,18 +8,39 @@
     <div id="vbot-body"></div>
 
     <div id="vbot-options">
-        <div><strong>Choose your character: </strong>
-        <input name="vbot-character" value="carl" checked id="vbot-carl-option" type="radio" />
-            <label for="vbot-carl-option"> Carl </label>
-        <input name="vbot-character" value="steve" id="vbot-steve-option" type="radio" />
-            <label for="vbot-steve-option"> Steve </label>
-        <input name="vbot-character" value="mouse" id="vbot-mouse-option" type="radio" />
-             <label for="vbot-mouse-option"> Mouse </label></div>
+        <h4>Choose your character: </h4>
+        <div>
+            <label>
+                <input name="vbot-character" value="carl" checked type="radio" /> Carl 
+            </label>
+            <label>
+                <input name="vbot-character" value="steve" type="radio" /> Steve 
+            </label>
+            <label>
+                <input name="vbot-character" value="mouse" type="radio" /> Mouse
+            </label>
+        </div>
 
-        <div><strong>Load Level and Textures: </strong>
-        <input type="file" id="vbot-file" multiple /></div>
-        or
-        <input type="button" id="vbot-test" value="Load Test Level" />
+        <h4>Load Level and Textures: </h4>
+        <div class="input-group">
+            <span class="input-group-addon btn btn-primary btn-file">
+                Browse<input type="file" id="vbot-level" multiple />
+            </span>
+            <div class="form-control disabled" id="vbot-level-text">Test level</div>
+        </div>
+
+        <h4>Set Script: </h4>
+        <div class="input-group">
+            <span class="input-group-addon btn btn-primary btn-file">
+                Browse<input type="file" id="vbot-script" />
+            </span>
+            <div class="form-control disabled" id="vbot-script-text">Test script</div>
+        </div>
+
+        <br />
+        <div class="row">
+            <button type="button" class="pull-right btn btn-lg btn-success" id="vbot-run">Start</div>
+        </div>
     </div>
     <br />
     <p>

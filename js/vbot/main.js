@@ -6,24 +6,45 @@ var $ = require('jquery');
 var VBOT = require('./app');
 var controller = require('./controller');
 var physics = require('./physics');
+var _ = require('underscore');
 
 var startedLoading = false;
+var script;
+
+function loadScript() {
+    var reader = new FileReader();
+    var req = new XMLHttpRequest();
+    var files = $('input#vbot-script')[0].files;
+
+    if (files.length === 1) {
+        reader.addEventListener('load', function (evt) {
+            script = evt.target.result;
+        });
+
+        reader.readAsText(files[0]);
+    } else {
+        req.addEventListener('load', function () {
+            script = this.responseText;
+        });
+        req.open('GET', 'assets/js/sample_script.js', true);
+        req.send();
+    }
+}
 
 $().ready( function() {
-    $('#vbot-file').on('change', function () {
-        if (!startedLoading) {
-            var character = $('input[name=vbot-character]:checked').val();
-            VBOT.loadScene(this.files, character);
-            startedLoading = true;
-        }
+    $('#vbot-script').on('change', function () {
+        console.log(this.files);
+        $('#vbot-script-text').text(
+            _.map(this.files, function(file) {
+                return file.name;
+            }));
     });
 
-    $('#vbot-test').on('click', function () {
-        if (!startedLoading) {
-            var character = $('input[name=vbot-character]:checked').val();
-            VBOT.loadScene(['assets/3d/test_level.kmz'], character);
-            startedLoading = true;
-        }
+    $('#vbot-level').on('change', function () {
+        $('#vbot-level-text').text(
+            _.map(this.files, function(file) {
+                return file.name;
+            }));
     });
 
     $('#mainNav').find('a').click(function() {
@@ -33,6 +54,23 @@ $().ready( function() {
             VBOT.pause(true);
         }
     });
+
+    $('#vbot-run').on('click', function () {
+        if (!startedLoading) {
+            var character = $('input[name=vbot-character]:checked').val();
+            var files = $('input#vbot-level')[0].files;
+
+            // Default to the test level
+            if (files.length === 0) {
+                files = ['assets/3d/test_level.kmz'];
+            }
+
+            loadScript();
+            VBOT.loadScene(files, character);
+            startedLoading = true;
+        }
+    });
+
 } );
 
 VBOT.on('scene-loaded', function () {
@@ -40,12 +78,7 @@ VBOT.on('scene-loaded', function () {
         var req = new XMLHttpRequest();
         switch (event.keyCode) {
             case 13: // enter
-                req.addEventListener('load', function () {
-                    console.log('loaded example');
-                    controller.start(VBOT, this.responseText);
-                });
-                req.open('GET', 'assets/js/sample_script.js', true);
-                req.send();
+                controller.start(VBOT, script);
                 break;
             case 80:
                 physics.toggleCollisionVolumes(VBOT.scene);
