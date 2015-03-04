@@ -1,5 +1,6 @@
 window.$ = window.jQuery = require('jquery');
 require('jquery-ui');
+require('bootstrap');
 
 // initialize model page view
 $().ready( function() {
@@ -25,7 +26,6 @@ $().ready( function() {
         $(target).show();
         // Prevent scrolling past the navbar
         e.preventDefault();
-        //simBuilderUpdateTargets();
     });
 });
 
