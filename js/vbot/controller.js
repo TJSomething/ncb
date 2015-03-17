@@ -28,6 +28,7 @@ function init(vbotApp) {
         robot = app.robot;
         capabilities = getCapabilities();
         initKeyboardListener();
+        send.open('ws://localhost:8080/ws/0');
     }
 }
 
@@ -208,7 +209,7 @@ function sense() {
     }
 
     sensors.camera = {
-        data: app.cameraData,
+        image: app.cameraData,
         width: app.cameraWidth,
         height: app.cameraHeight
     };
@@ -216,9 +217,74 @@ function sense() {
     sensors.collision = detectCollisions();
 
     sensors.keys = keys;
+    send.send(sensors);
 
     return sensors;
 }
+
+var send = (function () {
+    // Handle sockets
+    var ws;
+    var socketsOpen = 0;
+    var lastTime = Date.now();
+
+    function startSending(url) {
+        function onOpen() {
+            socketsOpen += 1;
+        }
+        function onMessage(event) {
+        }
+        if (!socketsOpen) {
+            ws = new WebSocket(url);
+            ws.binaryType = 'arraybuffer';
+            
+            ws.onopen = onOpen;
+
+            ws.onmessage = onMessage;
+        }
+    }
+
+    function send(sensors) {
+        var buffers;
+        if (socketsOpen === 1 &&
+            ws.readyState === 1 &&
+            Date.now() - lastTime > 30) {
+            buffers = serializeSensorData(sensors);
+            buffers.forEach(function (buffer) {
+                ws.send(buffer);
+            });
+            lastTime = Date.now();
+        }
+    }
+
+    function serializeSensorData(sensors) {
+        var buffers = []; 
+        buffers.unshift(JSON.stringify(sensors, function (k, v) {
+            if (k === 'keys') {
+                return Object.keys(v);
+            } else if (typeof v === 'object' &&
+                       v !== null && 
+                       v.buffer !== null &&
+                       v.buffer instanceof ArrayBuffer) {
+                buffers.push(v.buffer.slice(0));
+                return {
+                    index: buffers.length - 1,
+                    type: v.constructor.name
+                };
+            } else {
+                return v;
+            }
+        }));
+        // Add the number of messages
+        buffers[0] = '{"messages":' + (buffers.length-1) + ',"sensors":' + buffers[0] + '}';
+        return buffers;
+    }
+
+    return {
+        open: startSending,
+        send: send
+    };
+}());
 
 /**
  * A helper method that takes an object of functions that mirrors
