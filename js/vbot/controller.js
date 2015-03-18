@@ -14,7 +14,8 @@ var capabilities,
     actionsCompleted = [],
     app,
     keys = {},
-    sensors = {};
+    sensors = {},
+    brainOutputs = [];
 
 /**
  * Loads some useful objects into the controller scope.
@@ -28,7 +29,7 @@ function init(vbotApp) {
         robot = app.robot;
         capabilities = getCapabilities();
         initKeyboardListener();
-        send.open('ws://localhost:8080/ws/0');
+        send.open('ws://localhost:8080/ws/0', setOutputs);
     }
 }
 
@@ -217,9 +218,17 @@ function sense() {
     sensors.collision = detectCollisions();
 
     sensors.keys = keys;
+
+    sensors.brainOutputs = brainOutputs;
+    
+    // Send the sensors to the brain sim
     send.send(sensors);
 
     return sensors;
+}
+
+function setOutputs(outputs) {
+    brainOutputs = outputs;
 }
 
 var send = (function () {
@@ -227,11 +236,13 @@ var send = (function () {
     var ws;
     var socketsOpen = 0;
 
-    function startSending(url) {
+    function startSending(url, callback) {
+        callback = callback || function (){};
         function onOpen() {
             socketsOpen += 1;
         }
         function onMessage(event) {
+            callback(JSON.parse(event.data));
         }
         if (!socketsOpen) {
             ws = new WebSocket(url);
@@ -245,9 +256,6 @@ var send = (function () {
 
     function send(sensors) {
         var buffers;
-        if (ws !== undefined) {
-            console.log(ws.bufferedAmount);
-        }
         if (socketsOpen === 1 &&
             ws.readyState === 1 &&
             ws.bufferedAmount === 0) {
@@ -377,8 +385,6 @@ function start(vbotApp, script) {
     init(vbotApp);
 
     function start(e) {
-        console.log(e.data);
-
         sandbox.removeEventListener('message', start, false);
         sandbox.addEventListener('message', actuate, false);
     }
@@ -445,9 +451,6 @@ function actuate(e) {
         var step = e.data.step;
 
         if (e.data.actions) {
-            e.data.actions.forEach(function (action) {
-                console.log(action.action);
-            });
             actionQueue = actionQueue.concat(e.data.actions);
         }
 
@@ -671,11 +674,9 @@ function stepAction(action, dt) {
             if (done === 'success') {
                 app.robot.grab(app.scene.getObjectByName(action.target, true),
                                action.arm);
-                console.log(app.robot.rightHandObject);
             }
             if (done === 'success' ||
                 done === 'failure') {
-                console.log(done);
                 actionsCompleted.push(action.id);
             }
             break;
@@ -833,14 +834,12 @@ function initKeyboardListener() {
         var keyName = otherKeys.hasOwnProperty(e.which) ?
                 otherKeys[event.keyCode] :
                 String.fromCharCode(e.which);
-        console.log(keyName + ' down');
         keys[keyName] = true;
     });
     window.addEventListener('keyup', function (e) {
         var keyName = otherKeys.hasOwnProperty(e.which) ?
                 otherKeys[event.keyCode] :
                 String.fromCharCode(e.which);
-        console.log(keyName + ' up');
         delete keys[keyName];
     });
     window.addEventListener('blur', function (e) {
