@@ -1,6 +1,6 @@
-var THREE = require('three.js/three');
-require('imports?THREE=three.js/three!./lib/ColladaLoader');
-var JSZip = require('exports?JSZip!jszip/jszip.min');
+var THREE = require('threejs/build/three');
+require('imports?THREE=threejs/build/three!./lib/ColladaLoader');
+var JSZip = require('jszip');
 
 /**
  * Loads zipped Keyhole Markup Language files.

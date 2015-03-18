@@ -1,9 +1,9 @@
 // We're loading all of our three.js dependencies and then adding a few of
 // our own convenience methods.
-var THREE = require('three.js/three');
+var THREE = require('threejs/build/three');
 
-require('imports?THREE=three.js/three!threex-controls/controls/OrbitControls');
-require('imports?THREE=three.js/three!threex-colladaloader/ColladaLoader');
+require('imports?THREE=threejs/build/three!threex-controls/controls/OrbitControls');
+require('imports?THREE=threejs/build/three!threex-colladaloader/ColladaLoader');
 
 // Let's deal with the fact that we can't normally attach objects
 //  to bones
