@@ -226,7 +226,6 @@ var send = (function () {
     // Handle sockets
     var ws;
     var socketsOpen = 0;
-    var lastTime = Date.now();
 
     function startSending(url) {
         function onOpen() {
@@ -246,14 +245,16 @@ var send = (function () {
 
     function send(sensors) {
         var buffers;
+        if (ws !== undefined) {
+            console.log(ws.bufferedAmount);
+        }
         if (socketsOpen === 1 &&
             ws.readyState === 1 &&
-            Date.now() - lastTime > 30) {
+            ws.bufferedAmount === 0) {
             buffers = serializeSensorData(sensors);
             buffers.forEach(function (buffer) {
                 ws.send(buffer);
             });
-            lastTime = Date.now();
         }
     }
 
