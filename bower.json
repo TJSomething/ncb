@@ -9,9 +9,10 @@
     "angular-xeditable": "*",
     "threejs": "r70",
     "esprima": "~1.2.2",
-    "jszip": "~2.0.0",
     "threejs-stats": "*",
-    "jquery-ui": "~1.11.2"
+    "jquery-ui": "~1.11.2",
+    "threex-controls": "*",
+    "threex-colladaloader": "*"
   },
   "devDependencies": {
     "mocha": "*"

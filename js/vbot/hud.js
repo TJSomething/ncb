@@ -65,6 +65,13 @@ module.exports = function (app) {
                     '                    </li>' +
                     '                </ul>' +
                     '            </li>' +
+                    '            <li>Brain Outputs:' +
+                    '               <ul>' +
+                    '                   <li ng-repeat="output in sensors.brainOutputs track by $index">' +
+                    '                       {{output}}' +
+                    '                   </li>' +
+                    '               </ul>' +
+                    '           </li>' +
                     '        </ul>' +
                     '    </li>' +
                     '</ul>';
