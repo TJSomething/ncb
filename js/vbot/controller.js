@@ -727,7 +727,7 @@ function detectCollisions() {
             maxAxisLength = -Infinity,
             normal = collision.contactNormal.clone();
 
-        normal.transformDirection(app.robot.matrixWorld);
+        normal.transformDirection(app.robot.matrixWorld.clone().transpose());
 
         for (axis = 0; axis < 3; axis += 1) {
             if (Math.abs(normal.getComponent(axis)) >
@@ -752,9 +752,9 @@ function detectCollisions() {
             }
         } else if (maxAxis === 2) {
             if (normal.z > 0) {
-                collisions.front = true;
-            } else {
                 collisions.back = true;
+            } else {
+                collisions.front = true;
             }
         }
     }
