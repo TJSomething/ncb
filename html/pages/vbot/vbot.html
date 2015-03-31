@@ -8,6 +8,21 @@
     <div id="vbot-body"></div>
 
     <div id="vbot-options">
+        <h4>Server:</h4>
+        <div class="form-group">
+            <input class="form-control" id="vbot-server" value="localhost:8080"/>
+        </div>
+
+        <h4>Fake NCS Outputs: </h4>
+        <div class="form-group">
+            <input class="form-control" id="vbot-params" value="3"/>
+        </div>
+
+        <br />
+        <div class="row">
+            <button type="button" class="pull-right btn btn-lg btn-success" id="vbot-run-ncs">Start Simulation</button>
+        </div>
+
         <h4>Choose your character: </h4>
         <div>
             <label>
@@ -37,9 +52,14 @@
             <div class="form-control disabled" id="vbot-script-text">Test script</div>
         </div>
 
+        <h4>NCS URL:</h4>
+        <div class="form-group">
+            <input class="form-control" id="vbot-ncs-url"/>
+        </div>
+
         <br />
         <div class="row">
-            <button type="button" class="pull-right btn btn-lg btn-success" id="vbot-run">Start</div>
+            <button type="button" class="pull-right btn btn-lg btn-success" id="vbot-run">Start Robot</div>
         </div>
     </div>
     <br />

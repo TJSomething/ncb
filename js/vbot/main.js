@@ -32,8 +32,21 @@ function loadScript() {
 }
 
 $().ready( function() {
+    $('#vbot-run-ncs').click(function () {
+        var server = $('#vbot-server').val();
+        var params = $('#vbot-params').val();
+        $.ajax({
+            type: 'POST',
+            url: 'http://' + server + '/simulations/',
+            data: params,
+            contentType: 'text/plain',
+            success: function (data) {
+                $('#vbot-ncs-url').val(data);
+            }
+        });
+    });
+
     $('#vbot-script').on('change', function () {
-        console.log(this.files);
         $('#vbot-script-text').text(
             _.map(this.files, function(file) {
                 return file.name;
@@ -66,6 +79,7 @@ $().ready( function() {
             }
 
             loadScript();
+            VBOT.setDaemonURL($('#vbot-ncs-url').val());
             VBOT.loadScene(files, character);
             startedLoading = true;
         }

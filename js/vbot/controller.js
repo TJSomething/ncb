@@ -29,7 +29,9 @@ function init(vbotApp) {
         robot = app.robot;
         capabilities = getCapabilities();
         initKeyboardListener();
-        send.open('ws://localhost:8080/ws/0', setOutputs);
+        if (app.daemonURL) {
+            send.open(app.daemonURL, setOutputs);
+        }
     }
 }
 

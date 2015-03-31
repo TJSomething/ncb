@@ -805,6 +805,15 @@ app.pause = function (pauseState) {
 };
 
 /**
+ * Sets the URL for the WebSocket for reports and sensors.
+ * @memberof module:vbot/app
+ * @param {String} url the URL of the WebSocket
+ */
+app.setDaemonURL = function (url) {
+    app.daemonURL = url;
+};
+
+/**
  * Runs a test of the controller.
  *
  * @memberof module:vbot/app
