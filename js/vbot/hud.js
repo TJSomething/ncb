@@ -54,7 +54,7 @@ module.exports = function (app) {
                     '            <li>Keys:' +
                     '                <ul>' +
                     '                    <li ng-repeat="(key,val) in sensors.keys">' +
-                    '                        {{key}}: {{val}}' +
+                    '                        asdfasdfasdfasdfasdfasdfasdfasdf{{key}}: {{val}}' +
                     '                    </li>' +
                     '                </ul>' +
                     '            </li>' +
@@ -88,14 +88,10 @@ module.exports = function (app) {
             // Add a toggling hide/show
             var hidden = false;
             function show() {
-                $(hudElem).animate({
-                    left: '-25px'
-                }, { queue: false });
+                hudElem.classList.remove('vbot-hud-hidden');
             }
             function hide() {
-                $(hudElem).animate({
-                    left: (-hudElem.scrollWidth + 5) + 'px'
-                }, { queue: false });
+                hudElem.classList.add('vbot-hud-hidden');
             }
 
             // Show on hover

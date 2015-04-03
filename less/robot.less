@@ -42,6 +42,18 @@ div#vbot-body canvas {
     color: lightgray;
     max-height: 95%;
     overflow-y: auto;
+    -webkit-transition: 1s ease-in-out;
+    -moz-transition: 1s ease-in-out;
+    -o-transition: 1s ease-in-out;
+    transition: 1s ease-in-out;
+}
+
+.vbot-hud-hidden {
+   -webkit-transform: translate(~"calc(-100% + 35px)",0);
+   -moz-transform: translate(~"calc(-100% + 35px)",0);
+   -o-transform: translate(~"calc(-100% + 35px)",0);
+   -ms-transform: translate(~"calc(-100% + 35px)",0);
+   transform: translate(~"calc(-100% + 35px)",0);
 }
 
 #vbot-hud ul {
