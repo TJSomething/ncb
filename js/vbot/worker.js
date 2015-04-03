@@ -98,7 +98,7 @@ var _ = require('underscore');
          * @return {scripting~ExtendedAction}             this object
          */
         then: function (newState) {
-            this.newState = newState;
+            this.newState = stateToString(newState);
             return this;
         },
 
@@ -457,18 +457,27 @@ var _ = require('underscore');
     }
 
     /**
+     * Converts a state function to the string of its name, if it isn't
+     * already a string
+     */
+    function stateToString(newState) {
+        if (_.isString(newState) &&
+            states.hasOwnProperty(newState)) {
+            return newState;
+        } else if (typeof newState === 'function') {
+            return newState.name;
+        } else {
+            throw 'Invalid next state ' + newState;
+        }
+    }
+
+
+    /**
      *  Sets the state.
      * @memberOf scripting
      */
     function next(newState) {
-        if (_.isString(newState) &&
-            states.hasOwnProperty(newState)) {
-            state = newState;
-        } else if (typeof newState === 'function') {
-            state = newState.name;
-        } else {
-            throw 'Invalid next state ' + newState;
-        }
+        state = stateToString(newState);
     }
 
     /**
