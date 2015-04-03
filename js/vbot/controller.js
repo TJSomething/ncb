@@ -15,7 +15,8 @@ var capabilities,
     app,
     keys = {},
     sensors = {},
-    brainOutputs = [];
+    brainOutputs = [],
+    state = '';
 
 /**
  * Loads some useful objects into the controller scope.
@@ -456,6 +457,11 @@ function actuate(e) {
             actionQueue = actionQueue.concat(e.data.actions);
         }
 
+        if (e.data.state) {
+            state = e.data.state;
+            console.log(state);
+        }
+
         actionQueue.forEach(function (action) {
             stepAction(action, e.data.step);
         });
@@ -583,7 +589,7 @@ function stepAction(action, dt) {
             // Make sure we don't overshoot
             if (Math.sign(action.radiansLeft - Math.abs(stepAmount)) !==
                 Math.sign(action.radiansLeft)) {
-                stepAmount = action.radiansLeft;
+                stepAmount = Math.sign(action.degrees) * action.radiansLeft;
             }
             // Turn
             app.robot.instantRight(stepAmount);
