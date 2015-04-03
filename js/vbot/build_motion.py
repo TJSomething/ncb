@@ -297,6 +297,8 @@ func_template2 = Template("""
 
 'use strict';
 
+var THREE = require('./three');
+
 /** @exports vbot/motion */
 
 /**
