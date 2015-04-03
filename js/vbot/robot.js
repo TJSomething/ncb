@@ -990,8 +990,8 @@ var Robot = (function () {
          * @param  {Number} displacement the number of radians to turn right
          */
         function instantRight(displacement) {
-            this.animateWalking(0, displacement);
-            this.rotateY(displacement);
+            this.animateWalking(0, -displacement);
+            this.rotateY(-displacement);
         }
         robot.instantRight = instantRight;
 
@@ -1023,9 +1023,9 @@ var Robot = (function () {
                 turningRadius = ds / dtheta;
                 dist = turningRadius * Math.sin(dtheta) / Math.sin(phi);
 
-                this.instantRight(Math.PI/2 - phi);
+                this.instantRight(phi - Math.PI/2);
                 this.instantForward(dist);
-                this.instantRight(dtheta - Math.PI/2 + phi);
+                this.instantRight(Math.PI/2 - dtheta - phi);
             } else {
                 // We need to handle the case where there is no turning
                 this.instantForward(ds);
