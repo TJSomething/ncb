@@ -631,6 +631,8 @@ var _ = require('underscore');
                 // We actually end up threading the time interval into our
                 // actuation call
                 reply.step = oEvent.data.step;
+                // For debugging purposes, we also send back the current state
+                reply.state = state;
                 // Send the message back
                 self.postMessage(reply);
                 clearNewActions();
