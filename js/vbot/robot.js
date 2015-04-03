@@ -254,7 +254,8 @@ var hasArms = {
      */
    pickUpAtHand: function (arm) {
         var intersectingObj,
-            i;
+            i,
+            that = this;
 
         /**
          * Checks if an object is intersecting with the given hand
@@ -268,8 +269,8 @@ var hasArms = {
          */
         function checkHandCollision(arm, target) {
             var isRight = arm[0] === 'r' || arm[0] === 'R',
-                armObj = isRight ? this.rarm : this.larm,
-                handLocation = this.calculateHandLocation(armObj),
+                armObj = isRight ? that.rarm : that.larm,
+                handLocation = that.calculateHandLocation(armObj),
                 targetBox = new THREE.Box3().setFromObject(target);
 
                 return targetBox.containsPoint(handLocation);
