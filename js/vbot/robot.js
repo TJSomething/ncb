@@ -717,8 +717,8 @@ var Robot = (function () {
             }
 
             // Move the arms down
-            //larm.rotateZ(-Math.PI/2);
-            //rarm.rotateZ(Math.PI/2);
+            larm.rotateZ(-0.9*Math.PI/2);
+            rarm.rotateZ(0.9*Math.PI/2);
 
             // Place a camera in the robot
             // Find the bounding box
