@@ -54,7 +54,7 @@ module.exports = function (app) {
                     '            <li>Keys:' +
                     '                <ul>' +
                     '                    <li ng-repeat="(key,val) in sensors.keys">' +
-                    '                        asdfasdfasdfasdfasdfasdfasdfasdf{{key}}: {{val}}' +
+                    '                        {{key}}: {{val}}' +
                     '                    </li>' +
                     '                </ul>' +
                     '            </li>' +
